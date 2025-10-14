@@ -29,12 +29,11 @@ int main() {
     SetTargetFPS(60);
 
     AppState state = STATE_MENU;
-    int menuIndex = 0; // 0: Play, 1: Options, 2: Exit
+    int menuIndex = 0;
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
-        // Input: keyboard navigation
         if (IsKeyPressed(KEY_DOWN)) menuIndex = (menuIndex + 1) % 3;
-        if (IsKeyPressed(KEY_UP)) menuIndex = (menuIndex + 2) % 3; // -1 mod 3
+        if (IsKeyPressed(KEY_UP)) menuIndex = (menuIndex + 2) % 3;
         if (IsKeyPressed(KEY_ENTER)) {
             if (menuIndex == 0) state = STATE_PLAY;
             else if (menuIndex == 1) state = STATE_OPTIONS;
@@ -51,12 +50,10 @@ int main() {
             Rectangle btnOptions = { 300, 230, 200, 60 };
             Rectangle btnExit = { 300, 310, 200, 60 };
 
-            // Mouse-click handling via DrawButton helper
             if (DrawButton(btnPlay, "Start Game", LIGHTGRAY, 20)) state = STATE_PLAY;
             if (DrawButton(btnOptions, "Options", LIGHTGRAY, 20)) state = STATE_OPTIONS;
             if (DrawButton(btnExit, "Exit", LIGHTGRAY, 20)) state = STATE_EXIT;
 
-            // Visual keyboard selection
             Rectangle selector = { 280, 150 + menuIndex * 80, 240, 60 };
             DrawRectangleLinesEx(selector, 3, RED);
 
@@ -65,7 +62,6 @@ int main() {
 
         else if (state == STATE_PLAY) {
             DrawText("Game running... (press ESC to return to menu)", 120, 200, 20, DARKGREEN);
-            // Dummy content: simple moving circle
             static float x = 100;
             x += 2.0f;
             if (x > screenWidth + 50) x = -50;
@@ -78,7 +74,6 @@ int main() {
             DrawText("Options", 360, 60, 30, DARKBLUE);
             DrawText("(This is a placeholder. Press ESC to return)", 180, 120, 18, GRAY);
 
-            // Simple toggle example
             static bool fullscreen = false;
             Rectangle toggleRect = { 320, 200, 160, 40 };
             DrawRectangleRec(toggleRect, LIGHTGRAY);

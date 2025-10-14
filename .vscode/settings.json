@@ -1,0 +1,18 @@
+{
+    "files.associations": {
+        "*.h": "c",
+        "*.cpp": "cpp",
+        "raylib.h": "c"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cpptools",
+    "C_Cpp.default.compilerPath": "C:/Users/a25633/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin/g++.exe",
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.default.intelliSenseMode": "gcc-x64",
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell"
+        }
+    }
+}
