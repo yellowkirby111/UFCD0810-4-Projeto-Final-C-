@@ -4,7 +4,7 @@
         {
             "label": "Build Raylib Project",
             "type": "shell",
-            "command": "${workspaceFolder}/build.bat",
+            "command": "${workspaceFolder}/build_vscode.bat",
             "args": [],
             "group": {
                 "kind": "build",
@@ -58,6 +58,20 @@
                 "panel": "shared",
                 "showReuseMessage": true,
                 "clear": false
+            }
+        },
+        {
+            "label": "Run Only",
+            "type": "shell",
+            "command": "${workspaceFolder}/src/output/main.exe",
+            "group": "test",
+            "presentation": {
+                "echo": false,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": true
             }
         },
         {
