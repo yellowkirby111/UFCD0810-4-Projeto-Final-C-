@@ -57,7 +57,7 @@ int main() {
             if (DrawButton(btnOptions, "Options", LIGHTGRAY, 20)) state = STATE_OPTIONS;
             if (DrawButton(btnExit, "Exit", LIGHTGRAY, 20)) state = STATE_EXIT;
 
-            Rectangle selector = { 280, 150 + menuIndex * 80, 240, 60 };
+            Rectangle selector = { 280.0f, 150.0f + menuIndex * 80.0f, 240.0f, 60.0f };
             DrawRectangleLinesEx(selector, 3, RED);
 
             DrawText("Use Up/Down and Enter or click with mouse", 200, 500, 16, GRAY);

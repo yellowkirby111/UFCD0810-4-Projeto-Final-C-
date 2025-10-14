@@ -4,9 +4,8 @@
             "name": "Win32-MinGW",
             "includePath": [
                 "${workspaceFolder}/include",
-                "${workspaceFolder}/src",
-                "C:\\raylib\\include",
-                "C:\\Users\\a25633\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\include"
+                "${workspaceFolder}/include/raylib",
+                "${workspaceFolder}/src"
             ],
             "defines": [
                 "_DEBUG",
@@ -14,7 +13,7 @@
                 "_UNICODE",
                 "PLATFORM_DESKTOP"
             ],
-            "compilerPath": "C:/Users/a25633/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin/g++.exe",
+            "compilerPath": "g++",
             "cStandard": "c11",
             "cppStandard": "c++17",
             "intelliSenseMode": "gcc-x64"
