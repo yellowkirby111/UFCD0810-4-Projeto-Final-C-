@@ -1,0 +1,22 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.associations": {
+            "*.h": "c",
+            "*.cpp": "cpp",
+            "raylib.h": "c"
+        },
+        "C_Cpp.default.configurationProvider": "ms-vscode.cpptools"
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-vscode.cpptools",
+            "ms-vscode.cpptools-extension-pack",
+            "twxs.cmake"
+        ]
+    }
+}

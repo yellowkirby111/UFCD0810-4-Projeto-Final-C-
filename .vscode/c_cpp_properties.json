@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Win32-MinGW",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/include/raylib",
+                "${workspaceFolder}/src"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "PLATFORM_DESKTOP"
+            ],
+            "compilerPath": "g++",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}

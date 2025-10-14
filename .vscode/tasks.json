@@ -1,0 +1,82 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Raylib Project",
+            "type": "shell",
+            "command": "${workspaceFolder}/build.bat",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build Raylib Project (PowerShell)",
+            "type": "shell",
+            "command": "PowerShell",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}/build.ps1"
+            ],
+            "group": {
+                "kind": "build"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build and Run",
+            "type": "shell",
+            "command": "${workspaceFolder}/src/output/main.exe",
+            "group": "test",
+            "dependsOn": "Build Raylib Project",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-Command",
+                "Remove-Item -Path '${workspaceFolder}/src/output/main.exe' -Force -ErrorAction SilentlyContinue"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        }
+    ]
+}
