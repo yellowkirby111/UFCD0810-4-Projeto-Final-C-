@@ -318,9 +318,11 @@ int main() {
             }
             if (IsKeyPressed(KEY_SPACE)) showPassword = !showPassword;
         }
-        
-        // Handle text input for registration screen
-        if (state == STATE_REGISTER) {
+        else if (state == STATE_REGISTER) {
+            DrawText("Register New User", 320, 100, 32, DARKBLUE);
+            DrawText("Press ESC to return to login", 250, 140, 16, GRAY);
+            
+            // Handle text input for registration screen
             int key = GetCharPressed();
             if (key >= 32 && key <= 125) {
                 if (regInputFocus == 0 && strlen(regUsername) < 31) {
@@ -348,10 +350,6 @@ int main() {
                     regConfirmPassword[strlen(regConfirmPassword) - 1] = '\0';
             }
             if (IsKeyPressed(KEY_SPACE)) regShowPassword = !regShowPassword;
-        }
-        else if (state == STATE_REGISTER) {
-            DrawText("Register New User", 320, 100, 32, DARKBLUE);
-            DrawText("Press ESC to return to login", 250, 140, 16, GRAY);
 
             DrawText("Username:", 250, 180, 20, BLACK);
             DrawRectangle(370, 175, 200, 30, LIGHTGRAY);
