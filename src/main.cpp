@@ -98,6 +98,8 @@ int main() {
     int inputFocus = 0;
     bool showPassword = false;
     bool loginFailed = false;
+    std::string currentUser;
+    bool isAdmin = false;
 
     // Products storage
     struct Product { std::string name; double price; bool hasPrice; std::string size; };
