@@ -153,6 +153,11 @@ int main() {
     };
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
+        // Handle ESC key to go back to menu (except when in login or already in menu)
+        if (IsKeyPressed(KEY_ESCAPE) && state != STATE_LOGIN && state != STATE_MENU) {
+            state = STATE_MENU;
+        }
+        
         if (state == STATE_LOGIN) {
             if (IsKeyPressed(KEY_TAB)) inputFocus = 1 - inputFocus;
             if (IsKeyPressed(KEY_ENTER)) {
@@ -174,13 +179,12 @@ int main() {
             }
         }
         else if (state == STATE_MENU) {
-            if (IsKeyPressed(KEY_DOWN)) menuIndex = (menuIndex + 1) % 4;
-            if (IsKeyPressed(KEY_UP)) menuIndex = (menuIndex + 3) % 4;
+            if (IsKeyPressed(KEY_DOWN)) menuIndex = (menuIndex + 1) % 3;
+            if (IsKeyPressed(KEY_UP)) menuIndex = (menuIndex + 2) % 3;
             if (IsKeyPressed(KEY_ENTER)) {
                 if (menuIndex == 0) state = STATE_VIEW_PRODUCTS;
                 else if (menuIndex == 1) state = STATE_ADD_PRODUCT;
                 else if (menuIndex == 2) state = STATE_OPTIONS;
-                else state = STATE_EXIT;
             }
         }
 
@@ -235,29 +239,52 @@ int main() {
             if (IsKeyPressed(KEY_SPACE)) showPassword = !showPassword;
         }
         else if (state == STATE_MENU) {
-            DrawText("Clothing Store - Main Menu", 220, 60, 30, DARKBLUE);
+            // Logout button in top-left
+            Rectangle logoutBtn = { 20, 20, 100, 30 };
+            if (DrawButton(logoutBtn, "← Logout", LIGHTGRAY, 16)) {
+                // Clear user data and return to login
+                currentUser = "";
+                isAdmin = false;
+                strcpy(username, "");
+                strcpy(password, "");
+                inputFocus = 0;
+                showPassword = false;
+                loginFailed = false;
+                state = STATE_LOGIN;
+            }
+            
+            // Show current user info
+            std::string userInfo = "Logged in as: " + currentUser;
+            if (isAdmin) userInfo += " (Admin)";
+            DrawText(userInfo.c_str(), 600, 25, 16, DARKGRAY);
+            
+            DrawText("Clothing Store - Main Menu", 220, 80, 30, DARKBLUE);
 
-            Rectangle btnView = { 300, 150, 200, 60 };
-            Rectangle btnAdd = { 300, 230, 200, 60 };
-            Rectangle btnOptions = { 300, 310, 200, 60 };
-            Rectangle btnExit = { 300, 390, 200, 60 };
+            Rectangle btnView = { 300, 170, 200, 60 };
+            Rectangle btnAdd = { 300, 250, 200, 60 };
+            Rectangle btnOptions = { 300, 330, 200, 60 };
 
             if (DrawButton(btnView, "View Products", LIGHTGRAY, 20)) state = STATE_VIEW_PRODUCTS;
             if (DrawButton(btnAdd, "Add Product", LIGHTGRAY, 20)) state = STATE_ADD_PRODUCT;
             if (DrawButton(btnOptions, "Options", LIGHTGRAY, 20)) state = STATE_OPTIONS;
-            if (DrawButton(btnExit, "Exit", LIGHTGRAY, 20)) state = STATE_EXIT;
 
-            Rectangle selector = { 280.0f, 150.0f + menuIndex * 80.0f, 240.0f, 60.0f };
+            Rectangle selector = { 280.0f, 170.0f + menuIndex * 80.0f, 240.0f, 60.0f };
             DrawRectangleLinesEx(selector, 3, RED);
 
-            DrawText("Use Up/Down and Enter or click with mouse", 200, 500, 16, GRAY);
+            DrawText("Use Up/Down and Enter or click with mouse", 200, 480, 16, GRAY);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load products once when entering view (or when not loaded)
             if (!productsLoaded) productsLoaded = LoadProducts("data/products.txt");
 
+            // Back button
+            Rectangle backBtn = { 20, 20, 80, 30 };
+            if (DrawButton(backBtn, "← Back", LIGHTGRAY, 16)) {
+                state = STATE_MENU;
+            }
+
             DrawText("Product List", 340, 30, 28, DARKBLUE);
-            DrawText("Press ESC to return to menu", 260, 70, 16, GRAY);
+            DrawText("Press ESC or click Back to return to menu", 220, 70, 16, GRAY);
 
             // Scrolling via mouse wheel and arrow keys
             float wheel = GetMouseWheelMove();
@@ -294,10 +321,14 @@ int main() {
                     DrawText(line.c_str(), 120, (int)y, 20, BLACK);
                 }
             }
-
-            if (IsKeyPressed(KEY_ESCAPE)) state = STATE_MENU;
         }
         else if (state == STATE_ADD_PRODUCT) {
+            // Back button
+            Rectangle backBtn = { 20, 20, 80, 30 };
+            if (DrawButton(backBtn, "← Back", LIGHTGRAY, 16)) {
+                state = STATE_MENU;
+            }
+
             DrawText("Add Product", 320, 40, 28, DARKBLUE);
 
             if (currentUser.empty() || !isAdmin) {
@@ -387,9 +418,14 @@ int main() {
             }
         }
         else if (state == STATE_OPTIONS) {
+            // Back button
+            Rectangle backBtn = { 20, 20, 80, 30 };
+            if (DrawButton(backBtn, "← Back", LIGHTGRAY, 16)) {
+                state = STATE_MENU;
+            }
+
             DrawText("Options (placeholder)", 260, 200, 24, DARKBLUE);
-            DrawText("Press ESC to return to menu", 260, 240, 18, GRAY);
-            if (IsKeyPressed(KEY_ESCAPE)) state = STATE_MENU;
+            DrawText("Press ESC or click Back to return to menu", 200, 240, 18, GRAY);
         }
 
         EndDrawing();
