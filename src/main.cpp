@@ -120,8 +120,48 @@ int main() {
             DrawText("Use Up/Down and Enter or click with mouse", 200, 500, 16, GRAY);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
-            DrawText("Product List (placeholder)", 260, 200, 24, DARKGREEN);
-            DrawText("Press ESC to return to menu", 260, 240, 18, GRAY);
+            // Load products once when entering view (or when not loaded)
+            if (!productsLoaded) productsLoaded = LoadProducts("data/products.txt");
+
+            DrawText("Product List", 340, 30, 28, DARKBLUE);
+            DrawText("Press ESC to return to menu", 260, 70, 16, GRAY);
+
+            // Scrolling via mouse wheel and arrow keys
+            float wheel = GetMouseWheelMove();
+            productsScroll -= wheel * 20.0f; // wheel up -> move list up
+            if (IsKeyDown(KEY_DOWN)) productsScroll -= 2.0f;
+            if (IsKeyDown(KEY_UP)) productsScroll += 2.0f;
+
+            // Clamp scroll based on content
+            float contentHeight = (float)products.size() * 30.0f;
+            float minScroll = std::min(0.0f, 420.0f - contentHeight);
+            if (productsScroll < minScroll) productsScroll = minScroll;
+            if (productsScroll > 0) productsScroll = 0;
+
+            int startY = 120;
+            if (products.empty()) {
+                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", 60, 180, 18, RED);
+            } else {
+                for (size_t i = 0; i < products.size(); ++i) {
+                    float y = startY + i * 30 + productsScroll;
+                    if (y < 100 - 30 || y > screenHeight) continue; // simple culling
+                    const auto &p = products[i];
+                    std::string line = p.name;
+                    if (p.hasPrice) {
+                        std::ostringstream ss;
+                        ss.setf(std::ios::fixed); ss.precision(2);
+                        ss << " - $" << p.price;
+                        line += ss.str();
+                    }
+                    if (!p.size.empty()) {
+                        line += " (Size: ";
+                        line += p.size;
+                        line += ")";
+                    }
+                    DrawText(line.c_str(), 120, (int)y, 20, BLACK);
+                }
+            }
+
             if (IsKeyPressed(KEY_ESCAPE)) state = STATE_MENU;
         }
         else if (state == STATE_ADD_PRODUCT) {
