@@ -19,7 +19,6 @@ std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& fi
     std::ifstream file(filename);
     
     if (!file.is_open()) {
-        std::cout << "Could not open file: " << filename << std::endl;
         return users; // Return empty vector to allow trying other locations
     }
     
@@ -41,32 +40,16 @@ std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& fi
     }
     file.close();
     
-    std::cout << "Successfully loaded " << users.size() << " users from " << filename << std::endl;
     return users;
 }
 
 // Check login credentials
 bool CheckLogin(const std::vector<std::pair<std::string, std::string>>& users, const std::string& username, const std::string& password) {
-    std::cout << "\n=== LOGIN CHECK DEBUG ===" << std::endl;
-    std::cout << "Checking username: '" << username << "' (length: " << username.length() << ")" << std::endl;
-    std::cout << "Checking password: '" << password << "' (length: " << password.length() << ")" << std::endl;
-    
-    for (size_t i = 0; i < users.size(); ++i) {
-        const auto& u = users[i];
-        std::cout << "Comparing with user[" << i << "]: '" << u.first << "' / '" << u.second << "'" << std::endl;
-        
-        bool userMatch = (u.first == username);
-        bool passMatch = (u.second == password);
-        
-        std::cout << "  Username match: " << (userMatch ? "YES" : "NO") << std::endl;
-        std::cout << "  Password match: " << (passMatch ? "YES" : "NO") << std::endl;
-        
-        if (userMatch && passMatch) {
-            std::cout << "LOGIN SUCCESS!" << std::endl;
+    for (const auto& u : users) {
+        if (u.first == username && u.second == password) {
             return true;
         }
     }
-    std::cout << "LOGIN FAILED - No matching user/password combination" << std::endl;
     return false;
 }
 
@@ -91,7 +74,7 @@ int main() {
     const int screenWidth = 800;
     const int screenHeight = 600;
 
-    InitWindow(screenWidth, screenHeight, "Clothing Store App");
+    InitWindow(screenWidth, screenHeight, "Clothing Store App - Login System");
     SetTargetFPS(60);
 
     // Try to load users from multiple possible locations
@@ -106,19 +89,9 @@ int main() {
     
     // If still no users found, use defaults
     if (users.empty()) {
-        std::cout << "No users.txt file found. Using default users:" << std::endl;
         users.push_back({"admin", "1234"});
         users.push_back({"user", "password"});
-        std::cout << "Default users: admin/1234 and user/password" << std::endl;
     }
-
-    // Debug: print all loaded users
-    std::cout << "\n=== LOADED USERS DEBUG ===" << std::endl;
-    for (size_t i = 0; i < users.size(); ++i) {
-        const auto& u = users[i];
-        std::cout << "User[" << i << "]: '" << u.first << "' / '" << u.second << "'" << std::endl;
-    }
-    std::cout << "===========================\n" << std::endl;
 
     AppState state = STATE_LOGIN;
     int menuIndex = 0;
@@ -133,19 +106,12 @@ int main() {
         if (state == STATE_LOGIN) {
             if (IsKeyPressed(KEY_TAB)) inputFocus = 1 - inputFocus;
             if (IsKeyPressed(KEY_ENTER)) {
-                std::cout << "\n=== LOGIN ATTEMPT ===" << std::endl;
-                std::cout << "Username: '" << username << "'" << std::endl;
-                std::cout << "Password: '" << password << "'" << std::endl;
-
                 if (CheckLogin(users, std::string(username), std::string(password))) {
-                    std::cout << "LOGIN SUCCESSFUL! Accessing main menu..." << std::endl;
                     state = STATE_MENU;
                     loginFailed = false;
                 } else {
-                    std::cout << "LOGIN FAILED! Please try again." << std::endl;
                     loginFailed = true;
                 }
-                std::cout << "====================\n" << std::endl;
             }
         }
         else if (state == STATE_MENU) {
@@ -163,7 +129,7 @@ int main() {
         ClearBackground(RAYWHITE);
 
         if (state == STATE_LOGIN) {
-            DrawText("Login", 350, 100, 32, DARKBLUE);
+            DrawText("Clothing Store - Login", 280, 80, 28, DARKBLUE);
 
             DrawText("Username:", 250, 200, 20, BLACK);
             DrawRectangle(370, 195, 200, 30, LIGHTGRAY);
@@ -247,6 +213,5 @@ int main() {
     }
 
     CloseWindow();
-    std::cout << "Exiting application." << std::endl;
     return 0;
 }
