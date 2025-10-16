@@ -128,6 +128,9 @@ int main() {
     bool showPassword = false;
     bool loginFailed = false;
     int inputFocus = 0; // 0: username, 1: password
+    std::string currentUser;
+    bool isAdmin = false;
+    bool productsLoaded = false;
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
         if (state == STATE_LOGIN) {
@@ -139,6 +142,8 @@ int main() {
 
                 if (CheckLogin(users, std::string(username), std::string(password))) {
                     std::cout << "LOGIN SUCCESSFUL! Accessing main menu..." << std::endl;
+                    currentUser = std::string(username);
+                    isAdmin = (currentUser == "admin");
                     state = STATE_MENU;
                     loginFailed = false;
                 } else {
@@ -233,9 +238,93 @@ int main() {
             if (IsKeyPressed(KEY_ESCAPE)) state = STATE_MENU;
         }
         else if (state == STATE_ADD_PRODUCT) {
-            DrawText("Add Product (placeholder)", 260, 200, 24, DARKGREEN);
-            DrawText("Press ESC to return to menu", 260, 240, 18, GRAY);
-            if (IsKeyPressed(KEY_ESCAPE)) state = STATE_MENU;
+            DrawText("Add Product", 320, 40, 28, DARKBLUE);
+
+            if (currentUser.empty() || !isAdmin) {
+                DrawText("Admin privileges required to add products.", 180, 120, 20, RED);
+                DrawText("Please login with an admin account.", 220, 160, 18, GRAY);
+
+                Rectangle btnToLogin = { 300, 220, 200, 50 };
+                if (DrawButton(btnToLogin, "Go to Login", LIGHTGRAY, 20)) {
+                    // clear previous inputs and go to login
+                    memset(username, 0, sizeof(username));
+                    memset(password, 0, sizeof(password));
+                    state = STATE_LOGIN;
+                }
+            } else {
+                static std::string nameInput;
+                static std::string priceInput;
+                static std::string sizeInput;
+                static std::string msg;
+                static int activeFieldAdd = 0; // 0=name,1=price,2=size
+                int y = 130;
+
+                Rectangle nameRect = { 240, (float)(y - 5), 420, 30 };
+                Rectangle priceRect = { 240, (float)(y + 45), 200, 30 };
+                Rectangle sizeRect = { 520, (float)(y + 45), 140, 30 };
+
+                DrawText("Name:", 160, y, 20, BLACK);
+                DrawRectangleRec(nameRect, LIGHTGRAY);
+                DrawText(nameInput.c_str(), 250, y, 20, BLACK);
+                if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, RED);
+
+                DrawText("Price:", 160, y + 50, 20, BLACK);
+                DrawRectangleRec(priceRect, LIGHTGRAY);
+                DrawText(priceInput.c_str(), 250, y + 50, 20, BLACK);
+                if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, RED);
+
+                DrawText("Size:", 460, y + 50, 20, BLACK);
+                DrawRectangleRec(sizeRect, LIGHTGRAY);
+                DrawText(sizeInput.c_str(), 530, y + 50, 20, BLACK);
+                if (activeFieldAdd == 2) DrawRectangleLinesEx(sizeRect, 2, RED);
+
+                // handle typing into the active field
+                int cp = GetCharPressed();
+                while (cp > 0) {
+                    if (cp >= 32 && cp <= 125) {
+                        if (activeFieldAdd == 0 && nameInput.size() < 120) nameInput.push_back((char)cp);
+                        else if (activeFieldAdd == 1 && priceInput.size() < 32) priceInput.push_back((char)cp);
+                        else if (activeFieldAdd == 2 && sizeInput.size() < 32) sizeInput.push_back((char)cp);
+                    }
+                    cp = GetCharPressed();
+                }
+
+                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 3;
+                if (IsKeyPressed(KEY_BACKSPACE)) {
+                    if (activeFieldAdd == 0 && !nameInput.empty()) nameInput.pop_back();
+                    else if (activeFieldAdd == 1 && !priceInput.empty()) priceInput.pop_back();
+                    else if (activeFieldAdd == 2 && !sizeInput.empty()) sizeInput.pop_back();
+                }
+
+                Rectangle btnSave = { 260, 300, 160, 40 };
+                Rectangle btnCancel = { 440, 300, 160, 40 };
+
+                if (DrawButton(btnSave, "Save", LIGHTGRAY, 20)) {
+                    double pr = 0.0; bool ok = false;
+                    try {
+                        size_t start = 0; while (start < priceInput.size() && !((priceInput[start] >= '0' && priceInput[start] <= '9') || priceInput[start]=='.' || priceInput[start]=='-')) start++;
+                        std::string trimmed = priceInput.substr(start);
+                        if (!trimmed.empty()) { pr = std::stod(trimmed); ok = true; }
+                    } catch (...) { ok = false; }
+                    if (!ok) msg = "Invalid price";
+                    else if (nameInput.empty()) msg = "Name required";
+                    else {
+                        std::ofstream ofs("data/products.txt", std::ios::app);
+                        if (ofs) {
+                            ofs << nameInput << ";" << pr;
+                            if (!sizeInput.empty()) ofs << ";" << sizeInput;
+                            ofs << "\n";
+                            ofs.close();
+                            msg = "Product saved";
+                            nameInput.clear(); priceInput.clear(); sizeInput.clear(); productsLoaded = false;
+                        } else msg = "Failed to open file";
+                    }
+                }
+                if (DrawButton(btnCancel, "Cancel", LIGHTGRAY, 20)) {
+                    state = STATE_MENU;
+                }
+                if (!msg.empty()) DrawText(msg.c_str(), 320, 360, 18, DARKGREEN);
+            }
         }
         else if (state == STATE_OPTIONS) {
             DrawText("Options (placeholder)", 260, 200, 24, DARKBLUE);
