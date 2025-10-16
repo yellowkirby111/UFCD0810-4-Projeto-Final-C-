@@ -1,0 +1,6 @@
+T-shirt;9.99;M
+Jeans;39.50;L
+Hat;7.25;OneSize
+Socks;3.10;S
+Jacket;59.99;XL
+Macacao;34.37;M

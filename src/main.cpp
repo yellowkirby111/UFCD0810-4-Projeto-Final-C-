@@ -1,6 +1,12 @@
 #include "raylib.h"
 #include <iostream>
 #include <string>
+#include <fstream>
+#include <vector>
+#include <utility>
+#include <algorithm>
+#include <iomanip>
+#include <sstream>
 
 enum AppState { STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
@@ -28,6 +34,57 @@ int main() {
 
     AppState state = STATE_MENU;
     int menuIndex = 0;
+
+    // Products storage
+    struct Product { std::string name; double price; bool hasPrice; std::string size; };
+    std::vector<Product> products;
+    bool productsLoaded = false;
+    float productsScroll = 0.0f;
+
+    auto LoadProducts = [&](const std::string &path) -> bool {
+        products.clear();
+        std::ifstream ifs(path);
+        if (!ifs) return false;
+        std::string line;
+        while (std::getline(ifs, line)) {
+            if (line.empty()) continue;
+            size_t pos = line.find(';');
+            if (pos != std::string::npos) {
+                std::string name = line.substr(0, pos);
+                std::string rest = line.substr(pos + 1);
+                // rest can be price or price;size
+                std::string priceStr = rest;
+                std::string sizeStr;
+                size_t pos2 = rest.find(';');
+                if (pos2 != std::string::npos) {
+                    priceStr = rest.substr(0, pos2);
+                    sizeStr = rest.substr(pos2 + 1);
+                }
+                double price = 0.0;
+                bool ok = false;
+                try {
+                    // remove possible currency symbols and spaces
+                    size_t start = 0;
+                    while (start < priceStr.size() && !((priceStr[start] >= '0' && priceStr[start] <= '9') || priceStr[start] == '.' || priceStr[start] == '-')) start++;
+                    std::string trimmed = priceStr.substr(start);
+                    price = std::stod(trimmed);
+                    ok = true;
+                } catch (...) { ok = false; }
+                products.push_back({ name, price, ok, sizeStr });
+            } else {
+                products.push_back({ line, 0.0, false, std::string() });
+            }
+        }
+
+        // Sort products: priced items first (ascending by price), then unpriced items
+        std::sort(products.begin(), products.end(), [](const Product &a, const Product &b) {
+            if (a.hasPrice != b.hasPrice) return a.hasPrice; // true before false
+            if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
+            return a.price < b.price;
+        });
+
+        return true;
+    };
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
         if (state == STATE_MENU) {
