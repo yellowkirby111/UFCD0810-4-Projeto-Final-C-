@@ -5,3 +5,4 @@ Socks;3.10;S
 Jacket;59.99;XL
 Macacao;34.37;M
 boxers_batman;99.44;M
+meias do spongebob;9.99;XXS
