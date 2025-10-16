@@ -4,71 +4,9 @@
 #include <fstream>
 #include <vector>
 #include <utility>
-#include <cstring>
-
-// Helper function to trim whitespace
-std::string trim(const std::string& s) {
-    size_t start = s.find_first_not_of(" \t\r\n");
-    size_t end = s.find_last_not_of(" \t\r\n");
-    return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
-}
-
-// Load users from file
-std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& filename) {
-    std::vector<std::pair<std::string, std::string>> users;
-    std::ifstream file(filename);
-    
-    if (!file.is_open()) {
-        std::cout << "Could not open file: " << filename << std::endl;
-        return users; // Return empty vector to allow trying other locations
-    }
-    
-    std::string line;
-    while (std::getline(file, line)) {
-        // Remove any trailing \r characters (Windows CRLF)
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-        
-        size_t sep = line.find(',');
-        if (sep != std::string::npos && !line.empty()) {
-            std::string user = trim(line.substr(0, sep));
-            std::string pass = trim(line.substr(sep + 1));
-            if (!user.empty() && !pass.empty()) {
-                users.push_back({user, pass});
-            }
-        }
-    }
-    file.close();
-    
-    std::cout << "Successfully loaded " << users.size() << " users from " << filename << std::endl;
-    return users;
-}
-
-// Check login credentials
-bool CheckLogin(const std::vector<std::pair<std::string, std::string>>& users, const std::string& username, const std::string& password) {
-    std::cout << "\n=== LOGIN CHECK DEBUG ===" << std::endl;
-    std::cout << "Checking username: '" << username << "' (length: " << username.length() << ")" << std::endl;
-    std::cout << "Checking password: '" << password << "' (length: " << password.length() << ")" << std::endl;
-    
-    for (size_t i = 0; i < users.size(); ++i) {
-        const auto& u = users[i];
-        std::cout << "Comparing with user[" << i << "]: '" << u.first << "' / '" << u.second << "'" << std::endl;
-        
-        bool userMatch = (u.first == username);
-        bool passMatch = (u.second == password);
-        
-        std::cout << "  Username match: " << (userMatch ? "YES" : "NO") << std::endl;
-        std::cout << "  Password match: " << (passMatch ? "YES" : "NO") << std::endl;
-        
-        if (userMatch && passMatch) {
-            std::cout << "LOGIN SUCCESS!" << std::endl;
-            return true;
-        }
-    }
-    std::cout << "LOGIN FAILED - No matching user/password combination" << std::endl;
-    return false;
-}
+#include <algorithm>
+#include <iomanip>
+#include <sstream>
 
 enum AppState { STATE_LOGIN, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
@@ -123,11 +61,56 @@ int main() {
     AppState state = STATE_LOGIN;
     int menuIndex = 0;
 
-    char username[32] = "";
-    char password[32] = "";
-    bool showPassword = false;
-    bool loginFailed = false;
-    int inputFocus = 0; // 0: username, 1: password
+    // Products storage
+    struct Product { std::string name; double price; bool hasPrice; std::string size; };
+    std::vector<Product> products;
+    bool productsLoaded = false;
+    float productsScroll = 0.0f;
+
+    auto LoadProducts = [&](const std::string &path) -> bool {
+        products.clear();
+        std::ifstream ifs(path);
+        if (!ifs) return false;
+        std::string line;
+        while (std::getline(ifs, line)) {
+            if (line.empty()) continue;
+            size_t pos = line.find(';');
+            if (pos != std::string::npos) {
+                std::string name = line.substr(0, pos);
+                std::string rest = line.substr(pos + 1);
+                // rest can be price or price;size
+                std::string priceStr = rest;
+                std::string sizeStr;
+                size_t pos2 = rest.find(';');
+                if (pos2 != std::string::npos) {
+                    priceStr = rest.substr(0, pos2);
+                    sizeStr = rest.substr(pos2 + 1);
+                }
+                double price = 0.0;
+                bool ok = false;
+                try {
+                    // remove possible currency symbols and spaces
+                    size_t start = 0;
+                    while (start < priceStr.size() && !((priceStr[start] >= '0' && priceStr[start] <= '9') || priceStr[start] == '.' || priceStr[start] == '-')) start++;
+                    std::string trimmed = priceStr.substr(start);
+                    price = std::stod(trimmed);
+                    ok = true;
+                } catch (...) { ok = false; }
+                products.push_back({ name, price, ok, sizeStr });
+            } else {
+                products.push_back({ line, 0.0, false, std::string() });
+            }
+        }
+
+        // Sort products: priced items first (ascending by price), then unpriced items
+        std::sort(products.begin(), products.end(), [](const Product &a, const Product &b) {
+            if (a.hasPrice != b.hasPrice) return a.hasPrice; // true before false
+            if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
+            return a.price < b.price;
+        });
+
+        return true;
+    };
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
         if (state == STATE_LOGIN) {
@@ -228,8 +211,48 @@ int main() {
             DrawText("Use Up/Down and Enter or click with mouse", 200, 500, 16, GRAY);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
-            DrawText("Product List (placeholder)", 260, 200, 24, DARKGREEN);
-            DrawText("Press ESC to return to menu", 260, 240, 18, GRAY);
+            // Load products once when entering view (or when not loaded)
+            if (!productsLoaded) productsLoaded = LoadProducts("data/products.txt");
+
+            DrawText("Product List", 340, 30, 28, DARKBLUE);
+            DrawText("Press ESC to return to menu", 260, 70, 16, GRAY);
+
+            // Scrolling via mouse wheel and arrow keys
+            float wheel = GetMouseWheelMove();
+            productsScroll -= wheel * 20.0f; // wheel up -> move list up
+            if (IsKeyDown(KEY_DOWN)) productsScroll -= 2.0f;
+            if (IsKeyDown(KEY_UP)) productsScroll += 2.0f;
+
+            // Clamp scroll based on content
+            float contentHeight = (float)products.size() * 30.0f;
+            float minScroll = std::min(0.0f, 420.0f - contentHeight);
+            if (productsScroll < minScroll) productsScroll = minScroll;
+            if (productsScroll > 0) productsScroll = 0;
+
+            int startY = 120;
+            if (products.empty()) {
+                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", 60, 180, 18, RED);
+            } else {
+                for (size_t i = 0; i < products.size(); ++i) {
+                    float y = startY + i * 30 + productsScroll;
+                    if (y < 100 - 30 || y > screenHeight) continue; // simple culling
+                    const auto &p = products[i];
+                    std::string line = p.name;
+                    if (p.hasPrice) {
+                        std::ostringstream ss;
+                        ss.setf(std::ios::fixed); ss.precision(2);
+                        ss << " - $" << p.price;
+                        line += ss.str();
+                    }
+                    if (!p.size.empty()) {
+                        line += " (Size: ";
+                        line += p.size;
+                        line += ")";
+                    }
+                    DrawText(line.c_str(), 120, (int)y, 20, BLACK);
+                }
+            }
+
             if (IsKeyPressed(KEY_ESCAPE)) state = STATE_MENU;
         }
         else if (state == STATE_ADD_PRODUCT) {

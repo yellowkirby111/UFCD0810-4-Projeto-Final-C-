@@ -135,3 +135,17 @@ UFCD0810-4-Projeto-Final-C-/
 - ❌ Usar a mesma versão/localização do compilador
 
 ### 🎆 **O projeto está pronto para colaboração portátil!**
+
+## 📦 Formato do ficheiro de produtos
+
+O ecrã "View Products" lê o ficheiro `data/products.txt`. Cada linha deve ter a forma:
+
+- name;price;size
+
+O campo `size` é opcional. Exemplos:
+
+- `T-shirt;9.99;M`
+- `Hat;7.25;OneSize`
+- `Socks;3.10`
+
+O ficheiro de exemplo com entradas já foi adicionado em `data/products.txt`.
