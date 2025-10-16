@@ -4,9 +4,54 @@
 #include <fstream>
 #include <vector>
 #include <utility>
-#include <algorithm>
-#include <iomanip>
-#include <sstream>
+#include <cstring>
+
+// Helper function to trim whitespace
+std::string trim(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    size_t end = s.find_last_not_of(" \t\r\n");
+    return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+}
+
+// Load users from file
+std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& filename) {
+    std::vector<std::pair<std::string, std::string>> users;
+    std::ifstream file(filename);
+    
+    if (!file.is_open()) {
+        return users; // Return empty vector to allow trying other locations
+    }
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        // Remove any trailing \r characters (Windows CRLF)
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        
+        size_t sep = line.find(',');
+        if (sep != std::string::npos && !line.empty()) {
+            std::string user = trim(line.substr(0, sep));
+            std::string pass = trim(line.substr(sep + 1));
+            if (!user.empty() && !pass.empty()) {
+                users.push_back({user, pass});
+            }
+        }
+    }
+    file.close();
+    
+    return users;
+}
+
+// Check login credentials
+bool CheckLogin(const std::vector<std::pair<std::string, std::string>>& users, const std::string& username, const std::string& password) {
+    for (const auto& u : users) {
+        if (u.first == username && u.second == password) {
+            return true;
+        }
+    }
+    return false;
+}
 
 enum AppState { STATE_LOGIN, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
@@ -29,7 +74,7 @@ int main() {
     const int screenWidth = 800;
     const int screenHeight = 600;
 
-    InitWindow(screenWidth, screenHeight, "Clothing Store App");
+    InitWindow(screenWidth, screenHeight, "Clothing Store App - Login System");
     SetTargetFPS(60);
 
     // Try to load users from multiple possible locations
@@ -44,91 +89,29 @@ int main() {
     
     // If still no users found, use defaults
     if (users.empty()) {
-        std::cout << "No users.txt file found. Using default users:" << std::endl;
         users.push_back({"admin", "1234"});
         users.push_back({"user", "password"});
-        std::cout << "Default users: admin/1234 and user/password" << std::endl;
     }
-
-    // Debug: print all loaded users
-    std::cout << "\n=== LOADED USERS DEBUG ===" << std::endl;
-    for (size_t i = 0; i < users.size(); ++i) {
-        const auto& u = users[i];
-        std::cout << "User[" << i << "]: '" << u.first << "' / '" << u.second << "'" << std::endl;
-    }
-    std::cout << "===========================\n" << std::endl;
 
     AppState state = STATE_LOGIN;
     int menuIndex = 0;
 
-    // Products storage
-    struct Product { std::string name; double price; bool hasPrice; std::string size; };
-    std::vector<Product> products;
-    bool productsLoaded = false;
-    float productsScroll = 0.0f;
-
-    auto LoadProducts = [&](const std::string &path) -> bool {
-        products.clear();
-        std::ifstream ifs(path);
-        if (!ifs) return false;
-        std::string line;
-        while (std::getline(ifs, line)) {
-            if (line.empty()) continue;
-            size_t pos = line.find(';');
-            if (pos != std::string::npos) {
-                std::string name = line.substr(0, pos);
-                std::string rest = line.substr(pos + 1);
-                // rest can be price or price;size
-                std::string priceStr = rest;
-                std::string sizeStr;
-                size_t pos2 = rest.find(';');
-                if (pos2 != std::string::npos) {
-                    priceStr = rest.substr(0, pos2);
-                    sizeStr = rest.substr(pos2 + 1);
-                }
-                double price = 0.0;
-                bool ok = false;
-                try {
-                    // remove possible currency symbols and spaces
-                    size_t start = 0;
-                    while (start < priceStr.size() && !((priceStr[start] >= '0' && priceStr[start] <= '9') || priceStr[start] == '.' || priceStr[start] == '-')) start++;
-                    std::string trimmed = priceStr.substr(start);
-                    price = std::stod(trimmed);
-                    ok = true;
-                } catch (...) { ok = false; }
-                products.push_back({ name, price, ok, sizeStr });
-            } else {
-                products.push_back({ line, 0.0, false, std::string() });
-            }
-        }
-
-        // Sort products: priced items first (ascending by price), then unpriced items
-        std::sort(products.begin(), products.end(), [](const Product &a, const Product &b) {
-            if (a.hasPrice != b.hasPrice) return a.hasPrice; // true before false
-            if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
-            return a.price < b.price;
-        });
-
-        return true;
-    };
+    char username[32] = "";
+    char password[32] = "";
+    bool showPassword = false;
+    bool loginFailed = false;
+    int inputFocus = 0; // 0: username, 1: password
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
         if (state == STATE_LOGIN) {
             if (IsKeyPressed(KEY_TAB)) inputFocus = 1 - inputFocus;
             if (IsKeyPressed(KEY_ENTER)) {
-                std::cout << "\n=== LOGIN ATTEMPT ===" << std::endl;
-                std::cout << "Username: '" << username << "'" << std::endl;
-                std::cout << "Password: '" << password << "'" << std::endl;
-
                 if (CheckLogin(users, std::string(username), std::string(password))) {
-                    std::cout << "LOGIN SUCCESSFUL! Accessing main menu..." << std::endl;
                     state = STATE_MENU;
                     loginFailed = false;
                 } else {
-                    std::cout << "LOGIN FAILED! Please try again." << std::endl;
                     loginFailed = true;
                 }
-                std::cout << "====================\n" << std::endl;
             }
         }
         else if (state == STATE_MENU) {
@@ -146,7 +129,7 @@ int main() {
         ClearBackground(RAYWHITE);
 
         if (state == STATE_LOGIN) {
-            DrawText("Login", 350, 100, 32, DARKBLUE);
+            DrawText("Clothing Store - Login", 280, 80, 28, DARKBLUE);
 
             DrawText("Username:", 250, 200, 20, BLACK);
             DrawRectangle(370, 195, 200, 30, LIGHTGRAY);
@@ -211,48 +194,8 @@ int main() {
             DrawText("Use Up/Down and Enter or click with mouse", 200, 500, 16, GRAY);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
-            // Load products once when entering view (or when not loaded)
-            if (!productsLoaded) productsLoaded = LoadProducts("data/products.txt");
-
-            DrawText("Product List", 340, 30, 28, DARKBLUE);
-            DrawText("Press ESC to return to menu", 260, 70, 16, GRAY);
-
-            // Scrolling via mouse wheel and arrow keys
-            float wheel = GetMouseWheelMove();
-            productsScroll -= wheel * 20.0f; // wheel up -> move list up
-            if (IsKeyDown(KEY_DOWN)) productsScroll -= 2.0f;
-            if (IsKeyDown(KEY_UP)) productsScroll += 2.0f;
-
-            // Clamp scroll based on content
-            float contentHeight = (float)products.size() * 30.0f;
-            float minScroll = std::min(0.0f, 420.0f - contentHeight);
-            if (productsScroll < minScroll) productsScroll = minScroll;
-            if (productsScroll > 0) productsScroll = 0;
-
-            int startY = 120;
-            if (products.empty()) {
-                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", 60, 180, 18, RED);
-            } else {
-                for (size_t i = 0; i < products.size(); ++i) {
-                    float y = startY + i * 30 + productsScroll;
-                    if (y < 100 - 30 || y > screenHeight) continue; // simple culling
-                    const auto &p = products[i];
-                    std::string line = p.name;
-                    if (p.hasPrice) {
-                        std::ostringstream ss;
-                        ss.setf(std::ios::fixed); ss.precision(2);
-                        ss << " - $" << p.price;
-                        line += ss.str();
-                    }
-                    if (!p.size.empty()) {
-                        line += " (Size: ";
-                        line += p.size;
-                        line += ")";
-                    }
-                    DrawText(line.c_str(), 120, (int)y, 20, BLACK);
-                }
-            }
-
+            DrawText("Product List (placeholder)", 260, 200, 24, DARKGREEN);
+            DrawText("Press ESC to return to menu", 260, 240, 18, GRAY);
             if (IsKeyPressed(KEY_ESCAPE)) state = STATE_MENU;
         }
         else if (state == STATE_ADD_PRODUCT) {
@@ -270,6 +213,5 @@ int main() {
     }
 
     CloseWindow();
-    std::cout << "Exiting application." << std::endl;
     return 0;
 }
