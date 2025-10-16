@@ -7,8 +7,39 @@
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <cstring>
 
 enum AppState { STATE_LOGIN, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+
+// Function to load users from file
+std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& filename) {
+    std::vector<std::pair<std::string, std::string>> users;
+    std::ifstream file(filename);
+    if (file.is_open()) {
+        std::string line;
+        while (std::getline(file, line)) {
+            size_t pos = line.find(':');
+            if (pos != std::string::npos) {
+                std::string username = line.substr(0, pos);
+                std::string password = line.substr(pos + 1);
+                users.push_back({username, password});
+            }
+        }
+        file.close();
+    }
+    return users;
+}
+
+// Function to check login credentials
+bool CheckLogin(const std::vector<std::pair<std::string, std::string>>& users, 
+               const std::string& username, const std::string& password) {
+    for (const auto& user : users) {
+        if (user.first == username && user.second == password) {
+            return true;
+        }
+    }
+    return false;
+}
 
 bool DrawButton(const Rectangle &r, const char *text, Color baseColor, int fontSize = 20) {
     Vector2 mouse = GetMousePosition();
@@ -60,6 +91,13 @@ int main() {
 
     AppState state = STATE_LOGIN;
     int menuIndex = 0;
+    
+    // Login variables
+    char username[32] = "";
+    char password[32] = "";
+    int inputFocus = 0;
+    bool showPassword = false;
+    bool loginFailed = false;
 
     // Products storage
     struct Product { std::string name; double price; bool hasPrice; std::string size; };
