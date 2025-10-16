@@ -9,7 +9,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
 // Function to load users from file
 std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& filename) {
@@ -100,6 +100,15 @@ int main() {
     bool loginFailed = false;
     std::string currentUser;
     bool isAdmin = false;
+    
+    // Registration variables
+    char regUsername[32] = "";
+    char regPassword[32] = "";
+    char regConfirmPassword[32] = "";
+    int regInputFocus = 0; // 0=username, 1=password, 2=confirm
+    bool regShowPassword = false;
+    bool regFailed = false;
+    std::string regMessage = "";
 
     // Products storage
     struct Product { std::string name; double price; bool hasPrice; std::string size; };
@@ -151,11 +160,34 @@ int main() {
 
         return true;
     };
+    
+    auto SaveUser = [&](const std::string &username, const std::string &password) -> bool {
+        // Check if user already exists
+        for (const auto& user : users) {
+            if (user.first == username) {
+                return false; // User already exists
+            }
+        }
+        
+        // Append to users.txt file
+        std::ofstream ofs("users.txt", std::ios::app);
+        if (!ofs) return false;
+        ofs << username << ":" << password << std::endl;
+        ofs.close();
+        
+        // Add to current users list
+        users.push_back({username, password});
+        return true;
+    };
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
-        // Handle ESC key to go back to menu (except when in login or already in menu)
-        if (IsKeyPressed(KEY_ESCAPE) && state != STATE_LOGIN && state != STATE_MENU) {
-            state = STATE_MENU;
+        // Handle ESC key navigation
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            if (state == STATE_REGISTER) {
+                state = STATE_LOGIN;
+            } else if (state != STATE_LOGIN && state != STATE_MENU) {
+                state = STATE_MENU;
+            }
         }
         
         if (state == STATE_LOGIN) {
@@ -176,6 +208,41 @@ int main() {
                     loginFailed = true;
                 }
                 std::cout << "====================\n" << std::endl;
+            }
+        }
+        else if (state == STATE_REGISTER) {
+            if (IsKeyPressed(KEY_TAB)) regInputFocus = (regInputFocus + 1) % 3;
+            if (IsKeyPressed(KEY_ENTER)) {
+                std::string regUser = std::string(regUsername);
+                std::string regPass = std::string(regPassword);
+                std::string regConfirm = std::string(regConfirmPassword);
+                
+                if (regUser.empty() || regPass.empty()) {
+                    regFailed = true;
+                    regMessage = "Username and password are required!";
+                } else if (regPass != regConfirm) {
+                    regFailed = true;
+                    regMessage = "Passwords do not match!";
+                } else if (regPass.length() < 3) {
+                    regFailed = true;
+                    regMessage = "Password must be at least 3 characters!";
+                } else if (regUser.length() < 3) {
+                    regFailed = true;
+                    regMessage = "Username must be at least 3 characters!";
+                } else {
+                    if (SaveUser(regUser, regPass)) {
+                        regFailed = false;
+                        regMessage = "Registration successful! You can now login.";
+                        // Clear registration form
+                        strcpy(regUsername, "");
+                        strcpy(regPassword, "");
+                        strcpy(regConfirmPassword, "");
+                        regInputFocus = 0;
+                    } else {
+                        regFailed = true;
+                        regMessage = "Username already exists!";
+                    }
+                }
             }
         }
         else if (state == STATE_MENU) {
@@ -212,9 +279,22 @@ int main() {
             DrawText("Test accounts:", 250, 380, 16, DARKGRAY);
             DrawText("admin / 1234", 250, 400, 16, DARKGRAY);
             DrawText("user / password", 250, 420, 16, DARKGRAY);
+            
+            // Register button
+            Rectangle registerBtn = { 250, 460, 150, 30 };
+            if (DrawButton(registerBtn, "Register New User", SKYBLUE, 16)) {
+                state = STATE_REGISTER;
+                // Clear registration form
+                strcpy(regUsername, "");
+                strcpy(regPassword, "");
+                strcpy(regConfirmPassword, "");
+                regInputFocus = 0;
+                regFailed = false;
+                regMessage = "";
+            }
 
             if (loginFailed)
-                DrawText("Login failed. Try again.", 280, 450, 20, RED);
+                DrawText("Login failed. Try again.", 280, 500, 20, RED);
 
             // Input handling
             int key = GetCharPressed();
@@ -237,6 +317,108 @@ int main() {
                     password[strlen(password) - 1] = '\0';
             }
             if (IsKeyPressed(KEY_SPACE)) showPassword = !showPassword;
+        }
+        else if (state == STATE_REGISTER) {
+            DrawText("Register New User", 320, 100, 32, DARKBLUE);
+            DrawText("Press ESC to return to login", 250, 140, 16, GRAY);
+            
+            // Handle text input for registration screen
+            int key = GetCharPressed();
+            if (key >= 32 && key <= 125) {
+                if (regInputFocus == 0 && strlen(regUsername) < 31) {
+                    int len = strlen(regUsername);
+                    regUsername[len] = (char)key;
+                    regUsername[len + 1] = '\0';
+                }
+                else if (regInputFocus == 1 && strlen(regPassword) < 31) {
+                    int len = strlen(regPassword);
+                    regPassword[len] = (char)key;
+                    regPassword[len + 1] = '\0';
+                }
+                else if (regInputFocus == 2 && strlen(regConfirmPassword) < 31) {
+                    int len = strlen(regConfirmPassword);
+                    regConfirmPassword[len] = (char)key;
+                    regConfirmPassword[len + 1] = '\0';
+                }
+            }
+            if (IsKeyPressed(KEY_BACKSPACE)) {
+                if (regInputFocus == 0 && strlen(regUsername) > 0)
+                    regUsername[strlen(regUsername) - 1] = '\0';
+                else if (regInputFocus == 1 && strlen(regPassword) > 0)
+                    regPassword[strlen(regPassword) - 1] = '\0';
+                else if (regInputFocus == 2 && strlen(regConfirmPassword) > 0)
+                    regConfirmPassword[strlen(regConfirmPassword) - 1] = '\0';
+            }
+            if (IsKeyPressed(KEY_SPACE)) regShowPassword = !regShowPassword;
+
+            DrawText("Username:", 250, 180, 20, BLACK);
+            DrawRectangle(370, 175, 200, 30, LIGHTGRAY);
+            DrawText(regUsername, 375, 180, 20, BLACK);
+            if (regInputFocus == 0) DrawRectangleLines(370, 175, 200, 30, RED);
+
+            DrawText("Password:", 250, 230, 20, BLACK);
+            DrawRectangle(370, 225, 200, 30, LIGHTGRAY);
+            std::string regPassDisplay = regShowPassword ? regPassword : std::string(strlen(regPassword), '*');
+            DrawText(regPassDisplay.c_str(), 375, 230, 20, BLACK);
+            if (regInputFocus == 1) DrawRectangleLines(370, 225, 200, 30, RED);
+            
+            DrawText("Confirm Password:", 220, 280, 20, BLACK);
+            DrawRectangle(370, 275, 200, 30, LIGHTGRAY);
+            std::string regConfirmDisplay = regShowPassword ? regConfirmPassword : std::string(strlen(regConfirmPassword), '*');
+            DrawText(regConfirmDisplay.c_str(), 375, 280, 20, BLACK);
+            if (regInputFocus == 2) DrawRectangleLines(370, 275, 200, 30, RED);
+
+            DrawText("Press TAB to switch fields, ENTER to register", 200, 330, 18, GRAY);
+            DrawText("Press SPACE to show/hide passwords", 220, 350, 18, GRAY);
+            DrawText("Minimum 3 characters for username and password", 200, 370, 16, GRAY);
+            
+            // Back to login button
+            Rectangle backToLoginBtn = { 200, 420, 120, 30 };
+            if (DrawButton(backToLoginBtn, "← Back to Login", LIGHTGRAY, 16)) {
+                state = STATE_LOGIN;
+            }
+            
+            // Register button
+            Rectangle regBtn = { 350, 420, 100, 30 };
+            if (DrawButton(regBtn, "Register", LIME, 16)) {
+                // Trigger the same logic as ENTER key
+                std::string regUser = std::string(regUsername);
+                std::string regPass = std::string(regPassword);
+                std::string regConfirm = std::string(regConfirmPassword);
+                
+                if (regUser.empty() || regPass.empty()) {
+                    regFailed = true;
+                    regMessage = "Username and password are required!";
+                } else if (regPass != regConfirm) {
+                    regFailed = true;
+                    regMessage = "Passwords do not match!";
+                } else if (regPass.length() < 3) {
+                    regFailed = true;
+                    regMessage = "Password must be at least 3 characters!";
+                } else if (regUser.length() < 3) {
+                    regFailed = true;
+                    regMessage = "Username must be at least 3 characters!";
+                } else {
+                    if (SaveUser(regUser, regPass)) {
+                        regFailed = false;
+                        regMessage = "Registration successful! You can now login.";
+                        // Clear registration form
+                        strcpy(regUsername, "");
+                        strcpy(regPassword, "");
+                        strcpy(regConfirmPassword, "");
+                        regInputFocus = 0;
+                    } else {
+                        regFailed = true;
+                        regMessage = "Username already exists!";
+                    }
+                }
+            }
+
+            // Show success/error messages
+            if (!regMessage.empty()) {
+                Color msgColor = regFailed ? RED : GREEN;
+                DrawText(regMessage.c_str(), 150, 470, 18, msgColor);
+            }
         }
         else if (state == STATE_MENU) {
             // Logout button in top-left
