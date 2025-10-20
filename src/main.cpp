@@ -11,6 +11,7 @@
 #include <cstring>
 
 enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+enum ScreenMode { MODE_WINDOWED, MODE_BORDERLESS, MODE_FULLSCREEN };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -881,13 +882,12 @@ int main() {
                 state = STATE_MENU;
             }
             DrawText("Options", 350, 80, 32, colors.primary);
-            DrawText("Press ESC or click Back to return to menu", 200, 120, 16, colors.accent);
             
             // Theme selection section
-            DrawText("Theme:", 200, 200, 24, colors.text);
+            DrawText("Theme:", 200, 180, 24, colors.text);
             
-            Rectangle darkBtn = { 200, 240, 150, 40 };
-            Rectangle lightBtn = { 380, 240, 150, 40 };
+            Rectangle darkBtn = { 200, 220, 150, 40 };
+            Rectangle lightBtn = { 380, 220, 150, 40 };
             
             Color darkBtnColor = (currentTheme == THEME_DARK) ? colors.primary : colors.buttonBg;
             Color lightBtnColor = (currentTheme == THEME_LIGHT) ? colors.primary : colors.buttonBg;
@@ -901,25 +901,49 @@ int main() {
                 colors = GetColorScheme(currentTheme);
             }
 
-            // Fullscreen toggle
-            Rectangle fsBtn = { 200, 300, 150, 40 };
-            bool isFs = IsWindowFullscreen();
-            const char *fsLabel = isFs ? "Windowed" : "Fullscreen";
-            if (DrawButton(fsBtn, fsLabel, colors.buttonBg, colors, 20)) {
-                bool wasFs = IsWindowFullscreen();
-                ToggleFullscreen();
-                if (!wasFs) {
+            // Display modes section
+            DrawText("Display Mode:", 200, 300, 24, colors.text);
+            
+            Rectangle windowedBtn = { 200, 340, 150, 40 };
+            Rectangle borderlessBtn = { 380, 340, 150, 40 };
+            Rectangle fullscreenBtn = { 560, 340, 150, 40 };
+            
+            Color winBtnColor = (currentScreenMode == MODE_WINDOWED) ? colors.primary : colors.buttonBg;
+            Color borderlessBtnColor = (currentScreenMode == MODE_BORDERLESS) ? colors.primary : colors.buttonBg;
+            Color fsBtnColor = (currentScreenMode == MODE_FULLSCREEN) ? colors.primary : colors.buttonBg;
+            
+            if (DrawButton(windowedBtn, "Windowed", winBtnColor, colors, 20)) {
+                if (IsWindowFullscreen()) ToggleFullscreen();
+                SetWindowSize(screenWidth, screenHeight);
+                int mx = GetMonitorWidth(0);
+                int my = GetMonitorHeight(0);
+                SetWindowPosition((mx - screenWidth) / 2, (my - screenHeight) / 2);
+                currentScreenMode = MODE_WINDOWED;
+            }
+            
+            if (DrawButton(borderlessBtn, "Borderless", borderlessBtnColor, colors, 20)) {
+                if (IsWindowFullscreen()) ToggleFullscreen();
+                int mx = GetMonitorWidth(0);
+                int my = GetMonitorHeight(0);
+                SetWindowSize(mx, my);
+                SetWindowPosition(0, 0);
+                currentScreenMode = MODE_BORDERLESS;
+            }
+            
+            if (DrawButton(fullscreenBtn, "Fullscreen", fsBtnColor, colors, 20)) {
+                if (!IsWindowFullscreen()) {
                     int mw = GetMonitorWidth(0);
                     int mh = GetMonitorHeight(0);
                     SetWindowSize(mw, mh);
-                } else {
-                    SetWindowSize(screenWidth, screenHeight);
-                    int mx = GetMonitorWidth(0);
-                    int my = GetMonitorHeight(0);
-                    SetWindowPosition((mx - screenWidth) / 2, (my - screenHeight) / 2);
+                    ToggleFullscreen();
                 }
+                currentScreenMode = MODE_FULLSCREEN;
             }
-            
+
+            // Show current resolution
+            char resText[32];
+            sprintf(resText, "Current: %dx%d", GetScreenWidth(), GetScreenHeight());
+            DrawText(resText, 200, 400, 20, colors.text);
         }
 
         EndDrawing();
