@@ -548,18 +548,17 @@ int main() {
             if (isAdmin) userInfo += " (Admin)";
             DrawText(userInfo.c_str(), 600, 25, 16, colors.accent);
             
-            DrawText("Clothing Store - Main Menu", 220, 80, 30, colors.primary);
+            DrawText("Pepka", 300, 120, 60, colors.primary);
 
-            Rectangle btnView = { 300, 170, 200, 60 };
-            Rectangle btnAdd = { 300, 250, 200, 60 };
+            Rectangle btnView = { 300, 270, 200, 60 };
+            Rectangle btnAdd = { 300, 350, 200, 60 };
 
             if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_VIEW_PRODUCTS;
             if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
 
-            Rectangle selector = { 300.0f, 170.0f + menuIndex * 80.0f, 200.0f, 60.0f };
+            Rectangle selector = { 300.0f, 270.0f + menuIndex * 80.0f, 200.0f, 60.0f };
             DrawRectangleLinesEx(selector, 3, DARK_ACCENT);
 
-            DrawText("Use Up/Down and Enter or click with mouse", 200, 400, 16, GRAY);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load products once when entering view (or when not loaded)
