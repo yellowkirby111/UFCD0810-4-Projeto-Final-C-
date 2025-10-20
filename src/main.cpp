@@ -188,7 +188,7 @@ int main() {
     std::string regMessage = "";
 
     // Products storage
-    struct Product { std::string name; double price; bool hasPrice; std::string size; std::string description; };
+    struct Product { std::string name; double price; bool hasPrice; std::string size; std::string fabric; std::string sex; std::string description; };
     std::vector<Product> products;
     std::vector<Product> filteredProducts; // For search/sort results
     bool productsLoaded = false;
@@ -222,13 +222,23 @@ int main() {
             std::string name = tokens.size() > 0 ? tokens[0] : std::string();
             std::string priceStr = tokens.size() > 1 ? tokens[1] : std::string();
             std::string sizeStr = tokens.size() > 2 ? tokens[2] : std::string();
+            std::string fabricStr;
+            std::string sexStr;
             std::string descStr;
-            if (tokens.size() > 3) {
-                // join remaining tokens as description (in case description contains ';')
+            // Support both old and new formats. Preferred new format:
+            // name;price;size;fabric;sex;description (description may contain ';')
+            if (tokens.size() >= 6) {
+                fabricStr = tokens[3];
+                sexStr = tokens[4];
+                descStr = tokens[5];
+                for (size_t i = 6; i < tokens.size(); ++i) descStr += ";" + tokens[i];
+            } else if (tokens.size() == 5) {
+                // name;price;size;fabric;description  (no sex provided)
+                fabricStr = tokens[3];
+                descStr = tokens[4];
+            } else if (tokens.size() == 4) {
+                // older format: name;price;size;description
                 descStr = tokens[3];
-                for (size_t i = 4; i < tokens.size(); ++i) {
-                    descStr += ";" + tokens[i];
-                }
             }
 
             double price = 0.0;
@@ -242,7 +252,7 @@ int main() {
                     ok = true;
                 } catch (...) { ok = false; }
             }
-            products.push_back({ name, price, ok, sizeStr, descStr });
+            products.push_back({ name, price, ok, sizeStr, fabricStr, sexStr, descStr });
         }
 
         // Sort products: priced items first (ascending by price), then unpriced items
@@ -674,9 +684,26 @@ int main() {
                     Rectangle modal = { (float)(centerX - modalW/2), RY(0.18f), modalW, modalH };
                     DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(modal, 2, colors.accent);
                     DrawText(p.name.c_str(), (int)modal.x + 20, (int)modal.y + 18, 24, colors.text);
+
+                    // Show fabric and sex metadata if available
+                    int metaY = (int)modal.y + 54;
+                    if (!p.fabric.empty()) {
+                        std::string fabricLine = std::string("Fabric: ") + p.fabric;
+                        DrawText(fabricLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
+                        metaY += 22;
+                    }
+                    if (!p.sex.empty()) {
+                        std::string sexLine = std::string("For: ") + p.sex;
+                        DrawText(sexLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
+                        metaY += 22;
+                    }
+
                     std::string desc = p.description.empty() ? "(No description)" : p.description;
-                    int descY = (int)modal.y + 58; int maxW = (int)modal.width - 40;
-                    std::istringstream iss(desc); std::string word, lineBuf;
+                    int descY = metaY + 6;
+                    int maxWidth = (int)modal.width - 40;
+                    std::istringstream iss(desc);
+                    std::string word;
+                    std::string lineBuf;
                     while (iss >> word) {
                         std::string tryLine = lineBuf.empty() ? word : (lineBuf + " " + word);
                         if (MeasureText(tryLine.c_str(), 18) > maxW) { DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text); descY += 22; lineBuf = word; }
