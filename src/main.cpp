@@ -556,8 +556,8 @@ int main() {
             if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_VIEW_PRODUCTS;
             if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
 
-            Rectangle selector = { 280.0f, 170.0f + menuIndex * 80.0f, 240.0f, 60.0f };
-            DrawRectangleLinesEx(selector, 3, RED);
+            Rectangle selector = { 300.0f, 170.0f + menuIndex * 80.0f, 200.0f, 60.0f };
+            DrawRectangleLinesEx(selector, 3, DARK_ACCENT);
 
             DrawText("Use Up/Down and Enter or click with mouse", 200, 400, 16, GRAY);
         }
@@ -582,7 +582,7 @@ int main() {
             DrawText("Product List", 320, 30, 28, DARKBLUE);
             
             // Search input
-            DrawText("Search:", 20, 80, 18, BLACK);
+            DrawText("Search:", 20, 80, 18, colors.text);
             Rectangle searchRect = { 80, 75, 200, 30 };
             DrawRectangleRec(searchRect, LIGHTGRAY);
             DrawText(searchInput, 85, 80, 18, BLACK);
@@ -611,31 +611,29 @@ int main() {
                 }
             }
             
-            // Sorting buttons
+            // Sorting buttons (dark grey buttons; removed the "Default" button)
             Rectangle sortPriceAscBtn = { 300, 75, 80, 30 };
             Rectangle sortPriceDescBtn = { 390, 75, 80, 30 };
             Rectangle sortSizeAscBtn = { 480, 75, 80, 30 };
             Rectangle sortSizeDescBtn = { 570, 75, 80, 30 };
-            Rectangle sortDefaultBtn = { 670, 75, 80, 30 };
-            
-            if (DrawButton(sortPriceAscBtn, "Price ^  ", (sortMode == 1) ? LIME : LIGHTGRAY, colors, 14)) {
+
+            // Use theme button background (dark grey in dark theme)
+            Color sortBtnColor = colors.buttonBg;
+
+            if (DrawButton(sortPriceAscBtn, "Price ^", (sortMode == 1) ? LIME : sortBtnColor, colors, 14)) {
                 sortMode = 1;
                 needsResort = true;
             }
-            if (DrawButton(sortPriceDescBtn, "Price v  ", (sortMode == 2) ? LIME : LIGHTGRAY, colors, 14)) {
+            if (DrawButton(sortPriceDescBtn, "Price v", (sortMode == 2) ? LIME : sortBtnColor, colors, 14)) {
                 sortMode = 2;
                 needsResort = true;
             }
-            if (DrawButton(sortSizeAscBtn, "Size ^   ", (sortMode == 3) ? LIME : LIGHTGRAY, colors, 14)) {
+            if (DrawButton(sortSizeAscBtn, "Size ^", (sortMode == 3) ? LIME : sortBtnColor, colors, 14)) {
                 sortMode = 3;
                 needsResort = true;
             }
-            if (DrawButton(sortSizeDescBtn, "Size v   ", (sortMode == 4) ? LIME : LIGHTGRAY, colors, 14)) {
+            if (DrawButton(sortSizeDescBtn, "Size v", (sortMode == 4) ? LIME : sortBtnColor, colors, 14)) {
                 sortMode = 4;
-                needsResort = true;
-            }
-            if (DrawButton(sortDefaultBtn, "Default", (sortMode == 0) ? LIME : LIGHTGRAY, colors, 14)) {
-                sortMode = 0;
                 needsResort = true;
             }
 
@@ -682,7 +680,7 @@ int main() {
                         line += p.size;
                         line += ")";
                     }
-                    DrawText(line.c_str(), 20, (int)y, 20, BLACK);
+                    DrawText(line.c_str(), 20, (int)y, 20, colors.text);
                 }
             }
         }
@@ -731,7 +729,7 @@ int main() {
                 DrawText(priceInput.c_str(), 250, y + 50, 20, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
 
-                DrawText("Size:", 460, y + 50, 20, BLACK);
+                DrawText("Size:", 460, y + 50, 20, colors.text);
                 // Size selection buttons (admin): XS, S, M, L, XL, XXL
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
                 int btnW = 40;
@@ -749,7 +747,7 @@ int main() {
                 }
 
                 // Remove by name (admin)
-                DrawText("Remove product (name):", 80, y + 100, 20, BLACK);
+                DrawText("Remove product:", 50, y + 100, 20, colors.text);
                 DrawRectangleRec(removeRect, LIGHTGRAY);
                 DrawText(removeInput.c_str(), 250, y + 100, 20, BLACK);
                 if (activeFieldAdd == 3) DrawRectangleLinesEx(removeRect, 2, RED);
