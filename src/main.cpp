@@ -102,6 +102,17 @@ int main() {
     InitWindow(screenWidth, screenHeight, "Clothing Store App");
     SetTargetFPS(60);
 
+    // Ensure we start in windowed mode. Some environments/launchers may leave
+    // the window in fullscreen; if so, toggle back to windowed and set size.
+    if (IsWindowFullscreen()) {
+        ToggleFullscreen(); // switch to windowed
+    }
+    // Enforce desired window size and center it on primary monitor
+    SetWindowSize(screenWidth, screenHeight);
+    int mx = GetMonitorWidth(0);
+    int my = GetMonitorHeight(0);
+    SetWindowPosition((mx - screenWidth) / 2, (my - screenHeight) / 2);
+
     // Try to load users from multiple possible locations
     std::vector<std::pair<std::string, std::string>> users;
     
@@ -298,6 +309,23 @@ int main() {
                 state = STATE_LOGIN;
             } else if (state != STATE_LOGIN && state != STATE_MENU) {
                 state = STATE_MENU;
+            }
+        }
+        // Global fullscreen toggle (F11) - use smart toggle to avoid stretched scaling
+        if (IsKeyPressed(KEY_F11)) {
+            bool wasFs = IsWindowFullscreen();
+            ToggleFullscreen();
+            if (!wasFs) {
+                // now we're fullscreen: match monitor resolution to avoid scaling the 800x600 canvas
+                int mw = GetMonitorWidth(0);
+                int mh = GetMonitorHeight(0);
+                SetWindowSize(mw, mh);
+            } else {
+                // restored to windowed: set back to default logical size and center
+                SetWindowSize(screenWidth, screenHeight);
+                int mx = GetMonitorWidth(0);
+                int my = GetMonitorHeight(0);
+                SetWindowPosition((mx - screenWidth) / 2, (my - screenHeight) / 2);
             }
         }
         
@@ -852,7 +880,6 @@ int main() {
             if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
                 state = STATE_MENU;
             }
-
             DrawText("Options", 350, 80, 32, colors.primary);
             DrawText("Press ESC or click Back to return to menu", 200, 120, 16, colors.accent);
             
@@ -872,6 +899,25 @@ int main() {
             if (DrawButton(lightBtn, "Light Mode", lightBtnColor, colors, 20)) {
                 currentTheme = THEME_LIGHT;
                 colors = GetColorScheme(currentTheme);
+            }
+
+            // Fullscreen toggle
+            Rectangle fsBtn = { 200, 300, 150, 40 };
+            bool isFs = IsWindowFullscreen();
+            const char *fsLabel = isFs ? "Windowed" : "Fullscreen";
+            if (DrawButton(fsBtn, fsLabel, colors.buttonBg, colors, 20)) {
+                bool wasFs = IsWindowFullscreen();
+                ToggleFullscreen();
+                if (!wasFs) {
+                    int mw = GetMonitorWidth(0);
+                    int mh = GetMonitorHeight(0);
+                    SetWindowSize(mw, mh);
+                } else {
+                    SetWindowSize(screenWidth, screenHeight);
+                    int mx = GetMonitorWidth(0);
+                    int my = GetMonitorHeight(0);
+                    SetWindowPosition((mx - screenWidth) / 2, (my - screenHeight) / 2);
+                }
             }
             
         }
