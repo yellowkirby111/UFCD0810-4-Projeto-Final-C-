@@ -88,11 +88,25 @@ bool DrawButton(const Rectangle &r, const char *text, Color baseColor, const Col
     DrawRectangleRec(r, color);
     DrawRectangleLinesEx(r, 2, colors.primary);
 
-    int textWidth = MeasureText(text, fontSize);
-    DrawText(text, (int)(r.x + (r.width - textWidth) / 2), (int)(r.y + (r.height - fontSize) / 2), fontSize, colors.text);
+    // scale font relative to a 600px reference height
+    int scaledFont = std::max(8, (int)(fontSize * ((float)GetScreenHeight() / 600.0f)));
+    int textWidth = MeasureText(text, scaledFont);
+    DrawText(text, (int)(r.x + (r.width - textWidth) / 2), (int)(r.y + (r.height - scaledFont) / 2), scaledFont, colors.text);
 
     if (hovered && IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) return true;
     return false;
+}
+
+// --- Scaled text helpers (use these anywhere instead of raw DrawText/MeasureText) ---
+static inline int ScaledFontSize(int baseFontSize) {
+    // Reference UI built for 600px height; scale linearly with current screen height
+    return std::max(8, (int)(baseFontSize * ((float)GetScreenHeight() / 600.0f)));
+}
+static inline void DrawTextScaled(const char *text, int x, int y, int baseFontSize, Color color) {
+    DrawText(text, x, y, ScaledFontSize(baseFontSize), color);
+}
+static inline int MeasureTextScaled(const char *text, int baseFontSize) {
+    return MeasureText(text, ScaledFontSize(baseFontSize));
 }
 
 int main() {
@@ -105,7 +119,8 @@ int main() {
     // Window mode handling: support Windowed, Windowed-Fullscreen (bordered window resized to monitor),
     // and Fullscreen (real fullscreen). Use ApplyWindowMode(...) to change modes.
     enum WindowMode { WM_WINDOWED = 0, WM_WINDOWED_FULLSCREEN = 1, WM_FULLSCREEN = 2 };
-    WindowMode currentWindowMode = WM_WINDOWED;
+    // Start in windowed-fullscreen by default so the app fills the screen but remains a window (bordered)
+    WindowMode currentWindowMode = WM_WINDOWED_FULLSCREEN;
 
     auto ApplyWindowMode = [&](WindowMode mode) {
         int mw = GetMonitorWidth(0);
@@ -172,7 +187,8 @@ int main() {
     // Login variables
     char username[32] = "";
     char password[32] = "";
-    int inputFocus = 0;
+    // start with no field focused; user must click a box to type
+    int inputFocus = -1;
     bool showPassword = false;
     bool loginFailed = false;
     std::string currentUser;
@@ -356,109 +372,100 @@ int main() {
         }
         // Global fullscreen toggle (F11) - use smart toggle to avoid stretched scaling
         if (IsKeyPressed(KEY_F11)) {
-            // Toggle between fullscreen and windowed fullscreen (or windowed) in a sensible way:
-            if (currentWindowMode == WM_FULLSCREEN) ApplyWindowMode(WM_WINDOWED);
+            // Toggle between exclusive fullscreen and windowed-fullscreen (our base mode)
+            if (currentWindowMode == WM_FULLSCREEN) ApplyWindowMode(WM_WINDOWED_FULLSCREEN);
             else ApplyWindowMode(WM_FULLSCREEN);
         }
-        
-        if (state == STATE_LOGIN) {
-            if (IsKeyPressed(KEY_TAB)) inputFocus = 1 - inputFocus;
-            if (IsKeyPressed(KEY_ENTER)) {
-                std::cout << "\n=== LOGIN ATTEMPT ===" << std::endl;
-                std::cout << "Username: '" << username << "'" << std::endl;
-                std::cout << "Password: '" << password << "'" << std::endl;
 
-                if (CheckLogin(users, std::string(username), std::string(password))) {
-                    std::cout << "LOGIN SUCCESSFUL! Accessing main menu..." << std::endl;
-                    currentUser = std::string(username);
-                    isAdmin = (currentUser == "admin");
-                    state = STATE_MENU;
-                    loginFailed = false;
-                } else {
-                    std::cout << "LOGIN FAILED! Please try again." << std::endl;
-                    loginFailed = true;
-                }
-                std::cout << "====================\n" << std::endl;
-            }
-        }
-        else if (state == STATE_REGISTER) {
-            if (IsKeyPressed(KEY_TAB)) regInputFocus = (regInputFocus + 1) % 3;
-            if (IsKeyPressed(KEY_ENTER)) {
-                std::string regUser = std::string(regUsername);
-                std::string regPass = std::string(regPassword);
-                std::string regConfirm = std::string(regConfirmPassword);
-                
-                if (regUser.empty() || regPass.empty()) {
-                    regFailed = true;
-                    regMessage = "Username and password are required!";
-                } else if (regPass != regConfirm) {
-                    regFailed = true;
-                    regMessage = "Passwords do not match!";
-                } else if (regPass.length() < 3) {
-                    regFailed = true;
-                    regMessage = "Password must be at least 3 characters!";
-                } else if (regUser.length() < 3) {
-                    regFailed = true;
-                    regMessage = "Username must be at least 3 characters!";
-                } else {
-                    if (SaveUser(regUser, regPass)) {
-                        regFailed = false;
-                        regMessage = "Registration successful! You can now login.";
-                        // Clear registration form
-                        strcpy(regUsername, "");
-                        strcpy(regPassword, "");
-                        strcpy(regConfirmPassword, "");
-                        regInputFocus = 0;
-                    } else {
-                        regFailed = true;
-                        regMessage = "Username already exists!";
-                    }
-                }
-            }
-        }
-        else if (state == STATE_MENU) {
-            if (IsKeyPressed(KEY_DOWN)) menuIndex = (menuIndex + 1) % 2;
-            if (IsKeyPressed(KEY_UP)) menuIndex = (menuIndex + 1) % 2;
-            if (IsKeyPressed(KEY_ENTER)) {
-                if (menuIndex == 0) state = STATE_VIEW_PRODUCTS;
-                else if (menuIndex == 1) state = STATE_ADD_PRODUCT;
-            }
-        }
-
+        // Begin frame / clear background (required so raylib input buffering and drawing work correctly)
         BeginDrawing();
         ClearBackground(colors.background);
 
-        // --- Responsive layout helpers (use percentages relative to current window size) ---
+        // Responsive helpers (used by the drawing/input code)
         int sw = GetScreenWidth();
         int sh = GetScreenHeight();
-        auto RX = [&](float px)->int { return (int)(px * sw); }; // relative to width (0..1)
-        auto RY = [&](float py)->int { return (int)(py * sh); };// relative to height (0..1)
-        auto RW = [&](float pw)->int { return (int)(pw * sw); };
-        auto RH = [&](float ph)->int { return (int)(ph * sh); };
+        auto RX = [&](float px)->int { return (int)(px * sw); }; // relative x (0..1)
+        auto RY = [&](float py)->int { return (int)(py * sh); }; // relative y (0..1)
+        auto RW = [&](float pw)->int { return (int)(pw * sw); }; // relative width
+        auto RH = [&](float ph)->int { return (int)(ph * sh); }; // relative height
         int centerX = sw / 2;
-        // --- end helpers ---
- 
-        if (state == STATE_LOGIN) {
-            // place title near top-center
-            DrawText("Login", centerX - MeasureText("Login", 32)/2, RY(0.12f), 32, colors.primary);
 
-            // Username row centered-ish
+        if (state == STATE_LOGIN) {
+            // place title near top-center (scaled)
+            DrawTextScaled("Login", centerX - MeasureTextScaled("Login", 32)/2, RY(0.12f), 32, colors.primary);
+
+            // Username / Password layout (same positions used for input handling)
             int labelX = RX(0.28f);
             int inputX = RX(0.4625f);
             int inputW = RW(0.25f);
             int rowY = RY(0.33f);
-            DrawText("Username:", labelX, rowY, 20, colors.text);
-            DrawRectangle(inputX, rowY - 5, inputW, RH(0.05f), colors.inputBg);
-            DrawText(username, inputX + 5, rowY, 20, colors.text);
-            if (inputFocus == 0) DrawRectangleLines(inputX, rowY - 5, inputW, RH(0.05f), colors.accent);
+            Rectangle usernameRect = { (float)inputX, (float)(rowY - 5), (float)inputW, (float)RH(0.05f) };
+            Rectangle passwordRect = { (float)inputX, (float)(rowY + RH(0.083f) - 5), (float)inputW, (float)RH(0.05f) };
 
-            // Password row below
-            int pRowY = rowY + RH(0.083f);
-            DrawText("Password:", labelX, pRowY, 20, colors.text);
-            DrawRectangle(inputX, pRowY - 5, inputW, RH(0.05f), colors.inputBg);
+            DrawTextScaled("Username:", labelX, rowY, 20, colors.text);
+            DrawRectangleRec(usernameRect, colors.inputBg);
+            DrawTextScaled(username, (int)usernameRect.x + 6, (int)usernameRect.y + 6, 20, colors.text);
+            if (inputFocus == 0) DrawRectangleLinesEx(usernameRect, 2, colors.accent);
+
+            DrawTextScaled("Password:", labelX, rowY + RH(0.083f), 20, colors.text);
+            DrawRectangleRec(passwordRect, colors.inputBg);
             std::string passDisplay = showPassword ? password : std::string(strlen(password), '*');
-            DrawText(passDisplay.c_str(), inputX + 5, pRowY, 20, colors.text);
-            if (inputFocus == 1) DrawRectangleLines(inputX, pRowY - 5, inputW, RH(0.05f), colors.accent);
+            DrawTextScaled(passDisplay.c_str(), (int)passwordRect.x + 6, (int)passwordRect.y + 6, 20, colors.text);
+            if (inputFocus == 1) DrawRectangleLinesEx(passwordRect, 2, colors.accent);
+
+            // Handle mouse focus on inputs
+            Vector2 mousePos = GetMousePosition();
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                if (CheckCollisionPointRec(mousePos, usernameRect)) inputFocus = 0;
+                else if (CheckCollisionPointRec(mousePos, passwordRect)) inputFocus = 1;
+                else inputFocus = -1;
+            }
+
+            // Tab to switch fields (must click first or press Tab to focus)
+            if (IsKeyPressed(KEY_TAB)) {
+                if (inputFocus < 0) inputFocus = 0;
+                else inputFocus = (inputFocus + 1) % 2;
+            }
+
+            // Enter to attempt login (works from any focus)
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
+                std::string su = std::string(username);
+                std::string sp = std::string(password);
+                if (CheckLogin(users, su, sp)) {
+                    currentUser = su;
+                    isAdmin = (currentUser == "admin");
+                    loginFailed = false;
+                    state = STATE_MENU;
+                    // clear sensitive buffer if you want:
+                    // memset(password, 0, sizeof(password));
+                } else {
+                    loginFailed = true;
+                }
+            }
+
+            // Typing / backspace for the focused field
+            if (inputFocus == 0 || inputFocus == 1) {
+                int key = GetCharPressed();
+                while (key > 0) {
+                    if (key >= 32 && key <= 125) {
+                        if (inputFocus == 0 && strlen(username) < (int)(sizeof(username) - 1)) {
+                            int len = strlen(username);
+                            username[len] = (char)key; username[len+1] = '\0';
+                        } else if (inputFocus == 1 && strlen(password) < (int)(sizeof(password) - 1)) {
+                            int len = strlen(password);
+                            password[len] = (char)key; password[len+1] = '\0';
+                        }
+                    }
+                    key = GetCharPressed();
+                }
+                if (IsKeyPressed(KEY_BACKSPACE)) {
+                    if (inputFocus == 0 && strlen(username) > 0) username[strlen(username)-1] = '\0';
+                    if (inputFocus == 1 && strlen(password) > 0) password[strlen(password)-1] = '\0';
+                }
+            }
+
+            // Toggle password visibility with SPACE (user hint shown in Register screen too)
+            if (IsKeyPressed(KEY_SPACE)) showPassword = !showPassword;
 
             // Register button centered under inputs
             Rectangle registerBtn = { (float)(centerX - RW(0.09375f)), (float)RY(0.55f), (float)RW(0.1875f), (float)RH(0.05f) };
@@ -473,11 +480,11 @@ int main() {
             }
 
             if (loginFailed)
-                DrawText("Login failed. Try again.", centerX - MeasureText("Login failed. Try again.", 20)/2, RY(0.85f), 20, RED);
+                DrawTextScaled("Login failed. Try again.", centerX - MeasureTextScaled("Login failed. Try again.", 20)/2, RY(0.85f), 20, RED);
         }
         else if (state == STATE_REGISTER) {
-            DrawText("Register New User", centerX - MeasureText("Register New User", 32)/2, RY(0.12f), 32, colors.primary);
-            DrawText("Press ESC to return to login", centerX - MeasureText("Press ESC to return to login", 16)/2, RY(0.17f), 16, colors.accent);
+            DrawTextScaled("Register New User", centerX - MeasureTextScaled("Register New User", 32)/2, RY(0.12f), 32, colors.primary);
+            DrawTextScaled("Press ESC to return to login", centerX - MeasureTextScaled("Press ESC to return to login", 16)/2, RY(0.17f), 16, colors.accent);
             
             // registration inputs - use same layout logic as login (centered)
             int rLabelX = RX(0.28f);
@@ -486,24 +493,24 @@ int main() {
             int rY = RY(0.28f);
             DrawText("Username:", rLabelX, rY, 20, colors.text);
             DrawRectangle(rInputX, rY - 5, rInputW, RH(0.05f), colors.inputBg);
-            DrawText(regUsername, rInputX + 5, rY, 20, colors.text);
+            DrawTextScaled(regUsername, rInputX + 5, rY, 20, colors.text);
             if (regInputFocus == 0) DrawRectangleLines(rInputX, rY - 5, rInputW, RH(0.05f), colors.accent);
 
             DrawText("Password:", rLabelX, rY + RH(0.083f), 20, colors.text);
             DrawRectangle(rInputX, rY + RH(0.078f), rInputW, RH(0.05f), colors.inputBg);
             std::string regPassDisplay = regShowPassword ? regPassword : std::string(strlen(regPassword), '*');
-            DrawText(regPassDisplay.c_str(), rInputX + 5, rY + RH(0.083f), 20, colors.text);
+            DrawTextScaled(regPassDisplay.c_str(), rInputX + 5, rY + RH(0.083f), 20, colors.text);
             if (regInputFocus == 1) DrawRectangleLines(rInputX, rY + RH(0.078f), rInputW, RH(0.05f), colors.accent);
 
             DrawText("Confirm Password:", rLabelX - RW(0.05f), rY + RH(0.166f), 20, colors.text);
             DrawRectangle(rInputX, rY + RH(0.161f), rInputW, RH(0.05f), colors.inputBg);
             std::string regConfirmDisplay = regShowPassword ? regConfirmPassword : std::string(strlen(regConfirmPassword), '*');
-            DrawText(regConfirmDisplay.c_str(), rInputX + 5, rY + RH(0.166f), 20, colors.text);
+            DrawTextScaled(regConfirmDisplay.c_str(), rInputX + 5, rY + RH(0.166f), 20, colors.text);
             if (regInputFocus == 2) DrawRectangleLines(rInputX, rY + RH(0.161f), rInputW, RH(0.05f), colors.accent);
 
-            DrawText("Press TAB to switch fields, ENTER to register", 200, 330, 18, colors.accent);
-            DrawText("Press SPACE to show/hide passwords", 220, 350, 18, colors.accent);
-            DrawText("Minimum 3 characters for username and password", 200, 370, 16, colors.accent);
+            DrawTextScaled("Press TAB to switch fields, ENTER to register", RX(0.33f), RY(0.55f), 18, colors.accent);
+            DrawTextScaled("Press SPACE to show/hide passwords", RX(0.36f), RY(0.58f), 18, colors.accent);
+            DrawTextScaled("Minimum 3 characters for username and password", RX(0.33f), RY(0.61f), 16, colors.accent);
             
             // Back to login button
             Rectangle backToLoginBtn = { 200, 420, 120, 30 };
@@ -550,7 +557,7 @@ int main() {
             // Show success/error messages
             if (!regMessage.empty()) {
                 Color msgColor = regFailed ? RED : GREEN;
-                DrawText(regMessage.c_str(), 150, 470, 18, msgColor);
+                DrawTextScaled(regMessage.c_str(), centerX - MeasureTextScaled(regMessage.c_str(), 18)/2, RY(0.78f), 18, msgColor);
             }
         }
         else if (state == STATE_MENU) {
@@ -578,10 +585,10 @@ int main() {
             // Show current user info to left of options button
             std::string userInfo = "Logged in as: " + currentUser;
             if (isAdmin) userInfo += " (Admin)";
-            DrawText(userInfo.c_str(), optionsBtn.x - 10 - MeasureText(userInfo.c_str(), 16), RY(margin) + 6, 16, colors.accent);
-            
+            DrawTextScaled(userInfo.c_str(), (int)(optionsBtn.x - 10 - MeasureTextScaled(userInfo.c_str(), 16)), RY(margin) + 6, 16, colors.accent);
+             
             // Title and centered menu buttons
-            DrawText("Pepka", centerX - MeasureText("Pepka", 60)/2, RY(0.18f), 60, colors.primary);
+            DrawTextScaled("Pepka", centerX - MeasureTextScaled("Pepka", 60)/2, RY(0.18f), 60, colors.primary);
 
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)RY(0.45f), (float)RW(0.25f), (float)RH(0.1f) };
             Rectangle btnAdd =  { (float)(centerX - RW(0.125f)), (float)RY(0.62f), (float)RW(0.25f), (float)RH(0.1f) };
@@ -672,7 +679,7 @@ int main() {
                     std::string line = p.name;
                     if (p.hasPrice) { std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << " - $" << p.price; line += ss.str(); }
                     if (!p.size.empty()) { line += " (Size: " + p.size + ")"; }
-                    DrawText(line.c_str(), RX(0.03f), (int)y, 20, colors.text);
+                    DrawTextScaled(line.c_str(), RX(0.03f), (int)y, 20, colors.text);
 
                     Rectangle viewBtn = { (float)(sw - RW(0.18f)), y - rowH*0.15f, (float)RW(0.14f), (float)(rowH*0.85f) };
                     if (DrawButton(viewBtn, "View", colors.buttonBg, colors, 14)) viewDescriptionIndex = (int)i;
@@ -683,18 +690,18 @@ int main() {
                     float modalW = RW(0.75f), modalH = RH(0.55f);
                     Rectangle modal = { (float)(centerX - modalW/2), RY(0.18f), modalW, modalH };
                     DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(modal, 2, colors.accent);
-                    DrawText(p.name.c_str(), (int)modal.x + 20, (int)modal.y + 18, 24, colors.text);
+                    DrawTextScaled(p.name.c_str(), (int)modal.x + 20, (int)modal.y + 18, 24, colors.text);
 
                     // Show fabric and sex metadata if available
                     int metaY = (int)modal.y + 54;
                     if (!p.fabric.empty()) {
                         std::string fabricLine = std::string("Fabric: ") + p.fabric;
-                        DrawText(fabricLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
+                        DrawTextScaled(fabricLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
                         metaY += 22;
                     }
                     if (!p.sex.empty()) {
                         std::string sexLine = std::string("For: ") + p.sex;
-                        DrawText(sexLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
+                        DrawTextScaled(sexLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
                         metaY += 22;
                     }
 
@@ -706,10 +713,10 @@ int main() {
                     std::string lineBuf;
                     while (iss >> word) {
                         std::string tryLine = lineBuf.empty() ? word : (lineBuf + " " + word);
-                        if (MeasureText(tryLine.c_str(), 18) > maxW) { DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text); descY += 22; lineBuf = word; }
+                        if (MeasureTextScaled(tryLine.c_str(), 18) > maxWidth) { DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text); descY += 22; lineBuf = word; }
                         else lineBuf = tryLine;
                     }
-                    if (!lineBuf.empty()) DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
+                    if (!lineBuf.empty()) DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
                     Rectangle closeBtn = { modal.x + modal.width - RW(0.12f), modal.y + modal.height - RH(0.08f), RW(0.12f), RH(0.08f) };
                     if (DrawButton(closeBtn, "Close", colors.buttonBg, colors, 16)) viewDescriptionIndex = -1;
                 }
@@ -718,7 +725,7 @@ int main() {
         else if (state == STATE_ADD_PRODUCT) {
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
             if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
-            DrawText("Add Product", centerX - MeasureText("Add Product", 28)/2, RY(0.05f), 28, colors.primary);
+            DrawTextScaled("Add Product", centerX - MeasureTextScaled("Add Product", 28)/2, RY(0.05f), 28, colors.primary);
 
             if (currentUser.empty() || !isAdmin) {
                 DrawText("Admin privileges required to add products.", centerX - MeasureText("Admin privileges required to add products.", 20)/2, RY(0.20f), 20, colors.accent);
@@ -733,13 +740,13 @@ int main() {
                 Rectangle priceRect = { (float)RX(0.30f), baseY + RH(0.10f), (float)RW(0.28f), (float)RH(0.06f) };
                 Rectangle sizeRect = { priceRect.x + priceRect.width + RW(0.03f), priceRect.y, (float)RW(0.18f), (float)RH(0.06f) };
                 Rectangle removeRect = { nameRect.x, priceRect.y + RH(0.12f), nameRect.width, nameRect.height };
-                DrawText("Name:", RX(0.10f), baseY, 20, colors.text);
-                DrawRectangleRec(nameRect, colors.inputBg); DrawText(nameInput.c_str(), (int)nameRect.x + 6, (int)nameRect.y + 6, 20, colors.text);
+                DrawTextScaled("Name:", RX(0.10f), baseY, 20, colors.text);
+                DrawRectangleRec(nameRect, colors.inputBg); DrawTextScaled(nameInput.c_str(), (int)nameRect.x + 6, (int)nameRect.y + 6, 20, colors.text);
                 if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
-                DrawText("Price:", RX(0.10f), priceRect.y, 20, colors.text);
-                DrawRectangleRec(priceRect, colors.inputBg); DrawText(priceInput.c_str(), (int)priceRect.x + 6, (int)priceRect.y + 6, 20, colors.text);
+                DrawTextScaled("Price:", RX(0.10f), priceRect.y, 20, colors.text);
+                DrawRectangleRec(priceRect, colors.inputBg); DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 6, (int)priceRect.y + 6, 20, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
-                DrawText("Size:", priceRect.x + priceRect.width + 6, priceRect.y, 20, colors.text);
+                DrawTextScaled("Size:", priceRect.x + priceRect.width + 6, priceRect.y, 20, colors.text);
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
                 float sbtnW = RW(0.07f), sbtnH = RH(0.06f), sGap = RW(0.01f);
                 for (size_t si=0; si<sizeOptions.size(); ++si) {
@@ -748,7 +755,7 @@ int main() {
                     if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, RED);
                 }
                 DrawText("Remove product:", RX(0.05f), removeRect.y, 20, colors.text);
-                DrawRectangleRec(removeRect, LIGHTGRAY); DrawText(removeInput.c_str(), (int)removeRect.x + 6, (int)removeRect.y + 6, 20, BLACK);
+                DrawRectangleRec(removeRect, LIGHTGRAY); DrawTextScaled(removeInput.c_str(), (int)removeRect.x + 6, (int)removeRect.y + 6, 20, BLACK);
                 if (activeFieldAdd == 3) DrawRectangleLinesEx(removeRect, 2, RED);
 
                 int cp = GetCharPressed(); while (cp>0) { if (cp>=32 && cp<=125) { if (activeFieldAdd==0 && nameInput.size()<120) nameInput.push_back((char)cp); else if (activeFieldAdd==1 && priceInput.size()<32) priceInput.push_back((char)cp); else if (activeFieldAdd==3 && removeInput.size()<120) removeInput.push_back((char)cp); } cp=GetCharPressed(); }
@@ -781,20 +788,19 @@ int main() {
                     }
                 }
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) state = STATE_MENU;
-                if (!msg.empty()) DrawText(msg.c_str(), centerX - MeasureText(msg.c_str(), 18)/2, RY(0.58f), 18, colors.accent);
+                if (!msg.empty()) DrawTextScaled(msg.c_str(), centerX - MeasureTextScaled(msg.c_str(), 18)/2, RY(0.58f), 18, colors.accent);
             }
          }
-        else if (state == STATE_OPTIONS) {
+         else if (state == STATE_OPTIONS) {
               // Back button
              Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
              if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
                   state = STATE_MENU;
               }
--             DrawText("Options", 350, 80, 32, colors.primary);
--             DrawText("Press ESC or click Back to return to menu", 200, 120, 16, colors.accent);
-+             DrawText("Options", centerX - MeasureText("Options", 32)/2, RY(0.12f), 32, colors.primary);
-+             DrawText("Press ESC or click Back to return to menu", centerX - MeasureText("Press ESC or click Back to return to menu", 16)/2, RY(0.17f), 16, colors.accent);
+             DrawTextScaled("Options", centerX - MeasureTextScaled("Options", 32)/2, RY(0.12f), 32, colors.primary);
+             DrawTextScaled("Press ESC or click Back to return to menu", centerX - MeasureTextScaled("Press ESC or click Back to return to menu", 16)/2, RY(0.17f), 16, colors.accent);
              
+
              // Theme selection section
              DrawText("Theme:", 200, 200, 24, colors.text);
              
