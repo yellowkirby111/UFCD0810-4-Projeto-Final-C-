@@ -429,13 +429,13 @@ int main() {
         ClearBackground(colors.background);
 
         // --- Responsive layout helpers (use percentages relative to current window size) ---
-        int sw = GetScreenWidth();
-        int sh = GetScreenHeight();
-        auto RX = [&](float px)->int { return (int)(px * sw); }; // relative to width (0..1)
-        auto RY = [&](float py)->int { return (int)(py * sh); };// relative to height (0..1)
-        auto RW = [&](float pw)->int { return (int)(pw * sw); };
-        auto RH = [&](float ph)->int { return (int)(ph * sh); };
-        int centerX = sw / 2;
+    int sw = GetScreenWidth();
+    int sh = GetScreenHeight();
+    auto RX = [&](float px)->float { return px * (float)sw; }; // relative to width (0..1)
+    auto RY = [&](float py)->float { return py * (float)sh; };// relative to height (0..1)
+    auto RW = [&](float pw)->float { return pw * (float)sw; };
+    auto RH = [&](float ph)->float { return ph * (float)sh; };
+    int centerX = sw / 2;
         // --- end helpers ---
  
         if (state == STATE_LOGIN) {
@@ -459,6 +459,35 @@ int main() {
             std::string passDisplay = showPassword ? password : std::string(strlen(password), '*');
             DrawText(passDisplay.c_str(), inputX + 5, pRowY, 20, colors.text);
             if (inputFocus == 1) DrawRectangleLines(inputX, pRowY - 5, inputW, RH(0.05f), colors.accent);
+
+            // Click-to-focus for username/password inputs
+            Vector2 mousePos = GetMousePosition();
+            Rectangle usernameRect = { (float)inputX, (float)(rowY - 5), (float)inputW, RH(0.05f) };
+            Rectangle passwordRect = { (float)inputX, (float)(pRowY - 5), (float)inputW, RH(0.05f) };
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                if (CheckCollisionPointRec(mousePos, usernameRect)) {
+                    inputFocus = 0;
+                } else if (CheckCollisionPointRec(mousePos, passwordRect)) {
+                    inputFocus = 1;
+                }
+            }
+
+            // Text input handling for login fields
+            int c = GetCharPressed();
+            while (c > 0) {
+                if (c >= 32 && c <= 125) {
+                    if (inputFocus == 0 && strlen(username) < (int)sizeof(username)-1) {
+                        int len = strlen(username); username[len] = (char)c; username[len+1] = '\0';
+                    } else if (inputFocus == 1 && strlen(password) < (int)sizeof(password)-1) {
+                        int len = strlen(password); password[len] = (char)c; password[len+1] = '\0';
+                    }
+                }
+                c = GetCharPressed();
+            }
+            if (IsKeyPressed(KEY_BACKSPACE)) {
+                if (inputFocus == 0 && strlen(username) > 0) username[strlen(username)-1] = '\0';
+                else if (inputFocus == 1 && strlen(password) > 0) password[strlen(password)-1] = '\0';
+            }
 
             // Register button centered under inputs
             Rectangle registerBtn = { (float)(centerX - RW(0.09375f)), (float)RY(0.55f), (float)RW(0.1875f), (float)RH(0.05f) };
@@ -706,7 +735,7 @@ int main() {
                     std::string lineBuf;
                     while (iss >> word) {
                         std::string tryLine = lineBuf.empty() ? word : (lineBuf + " " + word);
-                        if (MeasureText(tryLine.c_str(), 18) > maxW) { DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text); descY += 22; lineBuf = word; }
+                        if (MeasureText(tryLine.c_str(), 18) > maxWidth) { DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text); descY += 22; lineBuf = word; }
                         else lineBuf = tryLine;
                     }
                     if (!lineBuf.empty()) DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
@@ -726,38 +755,70 @@ int main() {
                 Rectangle btnToLogin = { (float)(centerX - RW(0.15f)), RY(0.36f), (float)RW(0.30f), (float)RH(0.08f) };
                 if (DrawButton(btnToLogin, "Go to Login", colors.buttonBg, colors, 20)) { memset(username,0,sizeof(username)); memset(password,0,sizeof(password)); state = STATE_LOGIN; }
             } else {
+                // Responsive, centered Add Product form
                 static std::string nameInput, priceInput, sizeInput, removeInput, msg;
-                static int activeFieldAdd = 0;
-                float baseY = RY(0.18f);
-                Rectangle nameRect = { (float)RX(0.30f), baseY - RH(0.01f), (float)RW(0.55f), (float)RH(0.06f) };
-                Rectangle priceRect = { (float)RX(0.30f), baseY + RH(0.10f), (float)RW(0.28f), (float)RH(0.06f) };
-                Rectangle sizeRect = { priceRect.x + priceRect.width + RW(0.03f), priceRect.y, (float)RW(0.18f), (float)RH(0.06f) };
-                Rectangle removeRect = { nameRect.x, priceRect.y + RH(0.12f), nameRect.width, nameRect.height };
-                DrawText("Name:", RX(0.10f), baseY, 20, colors.text);
-                DrawRectangleRec(nameRect, colors.inputBg); DrawText(nameInput.c_str(), (int)nameRect.x + 6, (int)nameRect.y + 6, 20, colors.text);
+                static int activeFieldAdd = 0; // 0=name,1=price,2=size,3=remove
+
+                float sectionTop = RY(0.08f);
+                DrawText("Add Product", centerX - MeasureText("Add Product", 28)/2, RY(0.05f), 28, colors.primary);
+
+                float inputW = RW(0.70f);
+                float inputH = RH(0.06f);
+                float gapV = RH(0.04f);
+
+                Rectangle nameRect = { centerX - inputW/2.0f, sectionTop + gapV, inputW, inputH };
+                Rectangle priceRect = { centerX - RW(0.35f), nameRect.y + inputH + gapV, RW(0.28f), inputH };
+                Rectangle removeRect = { centerX - inputW/2.0f, priceRect.y + inputH + gapV, inputW, inputH };
+
+                // Draw name input
+                DrawText("Name:", nameRect.x - RW(0.08f), nameRect.y + 4, 20, colors.text);
+                DrawRectangleRec(nameRect, colors.inputBg);
+                DrawText(nameInput.c_str(), (int)nameRect.x + 6, (int)nameRect.y + 6, 20, colors.text);
                 if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
-                DrawText("Price:", RX(0.10f), priceRect.y, 20, colors.text);
-                DrawRectangleRec(priceRect, colors.inputBg); DrawText(priceInput.c_str(), (int)priceRect.x + 6, (int)priceRect.y + 6, 20, colors.text);
+
+                // Draw price input
+                DrawText("Price:", priceRect.x - RW(0.08f), priceRect.y + 4, 20, colors.text);
+                DrawRectangleRec(priceRect, colors.inputBg);
+                DrawText(priceInput.c_str(), (int)priceRect.x + 6, (int)priceRect.y + 6, 20, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
-                DrawText("Size:", priceRect.x + priceRect.width + 6, priceRect.y, 20, colors.text);
+
+                // Size selection (centered row) — placed below the price input
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
-                float sbtnW = RW(0.07f), sbtnH = RH(0.06f), sGap = RW(0.01f);
-                for (size_t si=0; si<sizeOptions.size(); ++si) {
-                    Rectangle sb = { sizeRect.x + (float)si*(sbtnW + sGap), sizeRect.y, sbtnW, sbtnH };
+                float sbtnW = RW(0.10f), sbtnH = inputH, sGap = RW(0.02f);
+                float totalS = sbtnW * (float)sizeOptions.size() + sGap * ((float)sizeOptions.size() - 1.0f);
+                float startSx = centerX - totalS/2.0f;
+                float sBtnsY = priceRect.y + inputH + RH(0.02f);
+
+                // Size label above buttons
+                DrawText("Size:", centerX - MeasureText("Size:", 20)/2, sBtnsY - RH(0.045f), 20, colors.text);
+
+                for (size_t si = 0; si < sizeOptions.size(); ++si) {
+                    Rectangle sb = { startSx + si * (sbtnW + sGap), sBtnsY, sbtnW, sbtnH };
                     if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) { sizeInput = sizeOptions[si]; activeFieldAdd = 2; }
                     if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, RED);
                 }
-                DrawText("Remove product:", RX(0.05f), removeRect.y, 20, colors.text);
-                DrawRectangleRec(removeRect, LIGHTGRAY); DrawText(removeInput.c_str(), (int)removeRect.x + 6, (int)removeRect.y + 6, 20, BLACK);
+
+                // Remove input (moved below size buttons) - add extra vertical spacing
+                removeRect.y = sBtnsY + sbtnH + RH(0.06f); // increased gap for clearer separation
+                DrawText("Remove product:", removeRect.x - RW(0.18f), removeRect.y + 4, 20, colors.text);
+                DrawRectangleRec(removeRect, LIGHTGRAY);
+                DrawText(removeInput.c_str(), (int)removeRect.x + 6, (int)removeRect.y + 6, 20, BLACK);
                 if (activeFieldAdd == 3) DrawRectangleLinesEx(removeRect, 2, RED);
 
+                // Input handling (preserve behavior)
                 int cp = GetCharPressed(); while (cp>0) { if (cp>=32 && cp<=125) { if (activeFieldAdd==0 && nameInput.size()<120) nameInput.push_back((char)cp); else if (activeFieldAdd==1 && priceInput.size()<32) priceInput.push_back((char)cp); else if (activeFieldAdd==3 && removeInput.size()<120) removeInput.push_back((char)cp); } cp=GetCharPressed(); }
                 if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd+1)%4;
                 if (IsKeyPressed(KEY_BACKSPACE)) { if (activeFieldAdd==0 && !nameInput.empty()) nameInput.pop_back(); else if (activeFieldAdd==1 && !priceInput.empty()) priceInput.pop_back(); else if (activeFieldAdd==3 && !removeInput.empty()) removeInput.pop_back(); }
 
-                Rectangle btnSave = { (float)RX(0.275f), RY(0.48f), (float)RW(0.18f), (float)RH(0.08f) };
-                Rectangle btnRemove = { (float)RX(0.495f), RY(0.48f), (float)RW(0.18f), (float)RH(0.08f) };
-                Rectangle btnCancel = { (float)RX(0.715f), RY(0.48f), (float)RW(0.18f), (float)RH(0.08f) };
+                // Action buttons centered
+                float actionY = removeRect.y + inputH + gapV;
+                float actionW = RW(0.22f), actionH = RH(0.08f), actionGap = RW(0.04f);
+                float totalActionW = actionW * 3 + actionGap * 2;
+                float actionStartX = centerX - totalActionW/2.0f;
+                Rectangle btnSave = { actionStartX, actionY, actionW, actionH };
+                Rectangle btnRemove = { actionStartX + actionW + actionGap, actionY, actionW, actionH };
+                Rectangle btnCancel = { actionStartX + 2*(actionW + actionGap), actionY, actionW, actionH };
+
                 if (DrawButton(btnSave, "Save", colors.primary, colors, 20)) {
                     double pr=0.0; bool ok=false;
                     try { size_t start=0; while (start<priceInput.size() && !((priceInput[start]>='0'&&priceInput[start]<='9')||priceInput[start]=='.'||priceInput[start]=='-')) start++; std::string trimmed = priceInput.substr(start); if (!trimmed.empty()) { pr = std::stod(trimmed); ok = true; } } catch(...) { ok=false; }
@@ -781,29 +842,32 @@ int main() {
                     }
                 }
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) state = STATE_MENU;
-                if (!msg.empty()) DrawText(msg.c_str(), centerX - MeasureText(msg.c_str(), 18)/2, RY(0.58f), 18, colors.accent);
+                if (!msg.empty()) DrawText(msg.c_str(), centerX - MeasureText(msg.c_str(), 18)/2, actionY + actionH + RH(0.03f), 18, colors.accent);
             }
          }
         else if (state == STATE_OPTIONS) {
               // Back button
              Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
              if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
-                  state = STATE_MENU;
-              }
--             DrawText("Options", 350, 80, 32, colors.primary);
--             DrawText("Press ESC or click Back to return to menu", 200, 120, 16, colors.accent);
-+             DrawText("Options", centerX - MeasureText("Options", 32)/2, RY(0.12f), 32, colors.primary);
-+             DrawText("Press ESC or click Back to return to menu", centerX - MeasureText("Press ESC or click Back to return to menu", 16)/2, RY(0.17f), 16, colors.accent);
+                 state = STATE_MENU;
+             }
+             DrawText("Options", centerX - MeasureText("Options", 32)/2, RY(0.12f), 32, colors.primary);
+             DrawText("Press ESC or click Back to return to menu", centerX - MeasureText("Press ESC or click Back to return to menu", 16)/2, RY(0.17f), 16, colors.accent);
              
-             // Theme selection section
-             DrawText("Theme:", 200, 200, 24, colors.text);
-             
-             Rectangle darkBtn = { 200, 240, 150, 40 };
-             Rectangle lightBtn = { 380, 240, 150, 40 };
-             
+             // Theme selection section (responsive layout)
+             float sectionTop = RY(0.22f);
+             DrawText("Theme:", centerX - MeasureText("Theme:", 24)/2, sectionTop, 24, colors.text);
+
+             float btnW = RW(0.20f);
+             float btnH = RH(0.08f);
+             float btnGap = RW(0.04f);
+             float themeY = sectionTop + RH(0.06f);
+             Rectangle darkBtn = { centerX - btnW - btnGap/2.0f, themeY, btnW, btnH };
+             Rectangle lightBtn = { centerX + btnGap/2.0f, themeY, btnW, btnH };
+
              Color darkBtnColor = (currentTheme == THEME_DARK) ? colors.primary : colors.buttonBg;
              Color lightBtnColor = (currentTheme == THEME_LIGHT) ? colors.primary : colors.buttonBg;
-             
+
              if (DrawButton(darkBtn, "Dark Mode", darkBtnColor, colors, 20)) {
                  currentTheme = THEME_DARK;
                  colors = GetColorScheme(currentTheme);
@@ -812,17 +876,23 @@ int main() {
                  currentTheme = THEME_LIGHT;
                  colors = GetColorScheme(currentTheme);
              }
- 
-            // Window mode selection: Windowed, Windowed-Fullscreen, Fullscreen
-            DrawText("Window Mode:", RX(0.25f), RY(0.35f), 24, colors.text);
-            Rectangle winBtn = { (float)RX(0.25f), (float)RY(0.42f), (float)RW(0.175f), (float)RH(0.07f) };
-            Rectangle winFsBtn = { winBtn.x + winBtn.width + RW(0.03f), winBtn.y, (float)RW(0.175f), (float)RH(0.07f) };
-            Rectangle fsBtn = { winFsBtn.x + winFsBtn.width + RW(0.03f), winBtn.y, (float)RW(0.175f), (float)RH(0.07f) };
- 
+
+            // Window mode selection: Windowed, Windowed-Fullscreen, Fullscreen (spaced horizontally)
+            float winSectionY = themeY + btnH + RH(0.06f);
+            DrawText("Window Mode:", centerX - MeasureText("Window Mode:", 24)/2, winSectionY, 24, colors.text);
+            float winBtnsY = winSectionY + RH(0.06f);
+            float winBtnW = RW(0.18f);
+            float winBtnH = RH(0.08f);
+            float totalWinW = winBtnW * 3 + btnGap * 2;
+            float startX = centerX - totalWinW/2.0f;
+            Rectangle winBtn = { startX, winBtnsY, winBtnW, winBtnH };
+            Rectangle winFsBtn = { startX + (winBtnW + btnGap), winBtnsY, winBtnW, winBtnH };
+            Rectangle fsBtn = { startX + 2*(winBtnW + btnGap), winBtnsY, winBtnW, winBtnH };
+
              Color winColor = (currentWindowMode == WM_WINDOWED) ? colors.primary : colors.buttonBg;
              Color winFsColor = (currentWindowMode == WM_WINDOWED_FULLSCREEN) ? colors.primary : colors.buttonBg;
              Color fsColor = (currentWindowMode == WM_FULLSCREEN) ? colors.primary : colors.buttonBg;
- 
+
              if (DrawButton(winBtn, "Windowed", winColor, colors, 20)) {
                  ApplyWindowMode(WM_WINDOWED);
              }
