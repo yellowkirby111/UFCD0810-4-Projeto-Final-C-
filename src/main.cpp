@@ -313,17 +313,9 @@ int main() {
             std::string passDisplay = showPassword ? password : std::string(strlen(password), '*');
             DrawText(passDisplay.c_str(), 375, 250, 20, colors.text);
             if (inputFocus == 1) DrawRectangleLines(370, 245, 200, 30, colors.accent);
-
-            DrawText("Press TAB to switch, ENTER to login", 250, 320, 18, colors.accent);
-            DrawText("Press SPACE to show/hide password", 250, 340, 18, colors.accent);
-            
-            // Show test credentials
-            DrawText("Test accounts:", 250, 380, 16, colors.accent);
-            DrawText("admin / 1234", 250, 400, 16, colors.accent);
-            DrawText("user / password", 250, 420, 16, colors.accent);
             
             // Register button
-            Rectangle registerBtn = { 250, 460, 150, 30 };
+            Rectangle registerBtn = { 335, 300, 150, 30 };
             if (DrawButton(registerBtn, "Register New User", colors.secondary, colors, 16)) {
                 state = STATE_REGISTER;
                 // Clear registration form
@@ -492,10 +484,9 @@ int main() {
             if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
             if (DrawButton(btnOptions, "Options", colors.buttonBg, colors, 20)) state = STATE_OPTIONS;
 
-            Rectangle selector = { 280.0f, 170.0f + menuIndex * 80.0f, 240.0f, 60.0f };
+            // Updated selector to match button dimensions exactly
+            Rectangle selector = { 300, 170.0f + menuIndex * 80.0f, 200, 60 };
             DrawRectangleLinesEx(selector, 3, colors.accent);
-
-            DrawText("Use Up/Down and Enter or click with mouse", 200, 480, 16, colors.accent);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load products once when entering view (or when not loaded)
