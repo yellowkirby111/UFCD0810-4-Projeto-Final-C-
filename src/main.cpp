@@ -11,6 +11,44 @@
 
 enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
+// Theme colors
+#define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
+#define DARK_PRIMARY (Color){138, 43, 226, 255}       // Blue-violet purple
+#define DARK_SECONDARY (Color){75, 0, 130, 255}       // Indigo purple
+#define DARK_ACCENT (Color){221, 160, 221, 255}       // Plum (light purple)
+#define DARK_TEXT (Color){240, 240, 240, 255}         // Light gray text
+#define DARK_INPUT_BG (Color){40, 40, 40, 255}        // Dark gray for inputs
+#define DARK_BUTTON_BG (Color){60, 60, 60, 255}       // Medium gray for buttons
+
+#define LIGHT_BACKGROUND WHITE
+#define LIGHT_PRIMARY (Color){138, 43, 226, 255}      // Same purple for consistency
+#define LIGHT_SECONDARY (Color){75, 0, 130, 255}      // Same indigo purple
+#define LIGHT_ACCENT (Color){221, 160, 221, 255}      // Plum accent
+#define LIGHT_TEXT BLACK                              // Black text on light
+#define LIGHT_INPUT_BG LIGHTGRAY                     // Light gray for inputs
+#define LIGHT_BUTTON_BG (Color){220, 220, 220, 255}  // Light gray for buttons
+
+enum Theme { THEME_DARK, THEME_LIGHT };
+
+// Theme management
+struct ColorScheme {
+    Color background;
+    Color primary;
+    Color secondary;
+    Color accent;
+    Color text;
+    Color inputBg;
+    Color buttonBg;
+};
+
+ColorScheme GetColorScheme(Theme theme) {
+    if (theme == THEME_DARK) {
+        return { DARK_BACKGROUND, DARK_PRIMARY, DARK_SECONDARY, DARK_ACCENT, DARK_TEXT, DARK_INPUT_BG, DARK_BUTTON_BG };
+    } else {
+        return { LIGHT_BACKGROUND, LIGHT_PRIMARY, LIGHT_SECONDARY, LIGHT_ACCENT, LIGHT_TEXT, LIGHT_INPUT_BG, LIGHT_BUTTON_BG };
+    }
+}
+
 // Function to load users from file
 std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& filename) {
     std::vector<std::pair<std::string, std::string>> users;
@@ -41,16 +79,16 @@ bool CheckLogin(const std::vector<std::pair<std::string, std::string>>& users,
     return false;
 }
 
-bool DrawButton(const Rectangle &r, const char *text, Color baseColor, int fontSize = 20) {
+bool DrawButton(const Rectangle &r, const char *text, Color baseColor, const ColorScheme &colors, int fontSize = 20) {
     Vector2 mouse = GetMousePosition();
     bool hovered = CheckCollisionPointRec(mouse, r);
-    Color color = hovered ? Fade(baseColor, 0.9f) : baseColor;
+    Color color = hovered ? Fade(baseColor, 0.8f) : baseColor;
 
     DrawRectangleRec(r, color);
-    DrawRectangleLinesEx(r, 2, BLACK);
+    DrawRectangleLinesEx(r, 2, colors.primary);
 
     int textWidth = MeasureText(text, fontSize);
-    DrawText(text, (int)(r.x + (r.width - textWidth) / 2), (int)(r.y + (r.height - fontSize) / 2), fontSize, BLACK);
+    DrawText(text, (int)(r.x + (r.width - textWidth) / 2), (int)(r.y + (r.height - fontSize) / 2), fontSize, colors.text);
 
     if (hovered && IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) return true;
     return false;
@@ -91,6 +129,10 @@ int main() {
 
     AppState state = STATE_LOGIN;
     int menuIndex = 0;
+    
+    // Theme variables
+    Theme currentTheme = THEME_DARK;  // Start with dark theme
+    ColorScheme colors = GetColorScheme(currentTheme);
     
     // Login variables
     char username[32] = "";
@@ -256,33 +298,33 @@ int main() {
         }
 
         BeginDrawing();
-        ClearBackground(RAYWHITE);
+        ClearBackground(colors.background);
 
         if (state == STATE_LOGIN) {
-            DrawText("Login", 350, 100, 32, DARKBLUE);
+            DrawText("Login", 350, 100, 32, colors.primary);
 
-            DrawText("Username:", 250, 200, 20, BLACK);
-            DrawRectangle(370, 195, 200, 30, LIGHTGRAY);
-            DrawText(username, 375, 200, 20, BLACK);
-            if (inputFocus == 0) DrawRectangleLines(370, 195, 200, 30, RED);
+            DrawText("Username:", 250, 200, 20, colors.text);
+            DrawRectangle(370, 195, 200, 30, colors.inputBg);
+            DrawText(username, 375, 200, 20, colors.text);
+            if (inputFocus == 0) DrawRectangleLines(370, 195, 200, 30, colors.accent);
 
-            DrawText("Password:", 250, 250, 20, BLACK);
-            DrawRectangle(370, 245, 200, 30, LIGHTGRAY);
+            DrawText("Password:", 250, 250, 20, colors.text);
+            DrawRectangle(370, 245, 200, 30, colors.inputBg);
             std::string passDisplay = showPassword ? password : std::string(strlen(password), '*');
-            DrawText(passDisplay.c_str(), 375, 250, 20, BLACK);
-            if (inputFocus == 1) DrawRectangleLines(370, 245, 200, 30, RED);
+            DrawText(passDisplay.c_str(), 375, 250, 20, colors.text);
+            if (inputFocus == 1) DrawRectangleLines(370, 245, 200, 30, colors.accent);
 
-            DrawText("Press TAB to switch, ENTER to login", 250, 320, 18, GRAY);
-            DrawText("Press SPACE to show/hide password", 250, 340, 18, GRAY);
+            DrawText("Press TAB to switch, ENTER to login", 250, 320, 18, colors.accent);
+            DrawText("Press SPACE to show/hide password", 250, 340, 18, colors.accent);
             
             // Show test credentials
-            DrawText("Test accounts:", 250, 380, 16, DARKGRAY);
-            DrawText("admin / 1234", 250, 400, 16, DARKGRAY);
-            DrawText("user / password", 250, 420, 16, DARKGRAY);
+            DrawText("Test accounts:", 250, 380, 16, colors.accent);
+            DrawText("admin / 1234", 250, 400, 16, colors.accent);
+            DrawText("user / password", 250, 420, 16, colors.accent);
             
             // Register button
             Rectangle registerBtn = { 250, 460, 150, 30 };
-            if (DrawButton(registerBtn, "Register New User", SKYBLUE, 16)) {
+            if (DrawButton(registerBtn, "Register New User", colors.secondary, colors, 16)) {
                 state = STATE_REGISTER;
                 // Clear registration form
                 strcpy(regUsername, "");
@@ -319,8 +361,8 @@ int main() {
             if (IsKeyPressed(KEY_SPACE)) showPassword = !showPassword;
         }
         else if (state == STATE_REGISTER) {
-            DrawText("Register New User", 320, 100, 32, DARKBLUE);
-            DrawText("Press ESC to return to login", 250, 140, 16, GRAY);
+            DrawText("Register New User", 320, 100, 32, colors.primary);
+            DrawText("Press ESC to return to login", 250, 140, 16, colors.accent);
             
             // Handle text input for registration screen
             int key = GetCharPressed();
@@ -351,36 +393,36 @@ int main() {
             }
             if (IsKeyPressed(KEY_SPACE)) regShowPassword = !regShowPassword;
 
-            DrawText("Username:", 250, 180, 20, BLACK);
-            DrawRectangle(370, 175, 200, 30, LIGHTGRAY);
-            DrawText(regUsername, 375, 180, 20, BLACK);
-            if (regInputFocus == 0) DrawRectangleLines(370, 175, 200, 30, RED);
+            DrawText("Username:", 250, 180, 20, colors.text);
+            DrawRectangle(370, 175, 200, 30, colors.inputBg);
+            DrawText(regUsername, 375, 180, 20, colors.text);
+            if (regInputFocus == 0) DrawRectangleLines(370, 175, 200, 30, colors.accent);
 
-            DrawText("Password:", 250, 230, 20, BLACK);
-            DrawRectangle(370, 225, 200, 30, LIGHTGRAY);
+            DrawText("Password:", 250, 230, 20, colors.text);
+            DrawRectangle(370, 225, 200, 30, colors.inputBg);
             std::string regPassDisplay = regShowPassword ? regPassword : std::string(strlen(regPassword), '*');
-            DrawText(regPassDisplay.c_str(), 375, 230, 20, BLACK);
-            if (regInputFocus == 1) DrawRectangleLines(370, 225, 200, 30, RED);
+            DrawText(regPassDisplay.c_str(), 375, 230, 20, colors.text);
+            if (regInputFocus == 1) DrawRectangleLines(370, 225, 200, 30, colors.accent);
             
-            DrawText("Confirm Password:", 220, 280, 20, BLACK);
-            DrawRectangle(370, 275, 200, 30, LIGHTGRAY);
+            DrawText("Confirm Password:", 220, 280, 20, colors.text);
+            DrawRectangle(370, 275, 200, 30, colors.inputBg);
             std::string regConfirmDisplay = regShowPassword ? regConfirmPassword : std::string(strlen(regConfirmPassword), '*');
-            DrawText(regConfirmDisplay.c_str(), 375, 280, 20, BLACK);
-            if (regInputFocus == 2) DrawRectangleLines(370, 275, 200, 30, RED);
+            DrawText(regConfirmDisplay.c_str(), 375, 280, 20, colors.text);
+            if (regInputFocus == 2) DrawRectangleLines(370, 275, 200, 30, colors.accent);
 
-            DrawText("Press TAB to switch fields, ENTER to register", 200, 330, 18, GRAY);
-            DrawText("Press SPACE to show/hide passwords", 220, 350, 18, GRAY);
-            DrawText("Minimum 3 characters for username and password", 200, 370, 16, GRAY);
+            DrawText("Press TAB to switch fields, ENTER to register", 200, 330, 18, colors.accent);
+            DrawText("Press SPACE to show/hide passwords", 220, 350, 18, colors.accent);
+            DrawText("Minimum 3 characters for username and password", 200, 370, 16, colors.accent);
             
             // Back to login button
             Rectangle backToLoginBtn = { 200, 420, 120, 30 };
-            if (DrawButton(backToLoginBtn, "← Back to Login", LIGHTGRAY, 16)) {
+            if (DrawButton(backToLoginBtn, "← Back to Login", colors.buttonBg, colors, 16)) {
                 state = STATE_LOGIN;
             }
             
             // Register button
             Rectangle regBtn = { 350, 420, 100, 30 };
-            if (DrawButton(regBtn, "Register", LIME, 16)) {
+            if (DrawButton(regBtn, "Register", colors.primary, colors, 16)) {
                 // Trigger the same logic as ENTER key
                 std::string regUser = std::string(regUsername);
                 std::string regPass = std::string(regPassword);
@@ -423,7 +465,7 @@ int main() {
         else if (state == STATE_MENU) {
             // Logout button in top-left
             Rectangle logoutBtn = { 20, 20, 100, 30 };
-            if (DrawButton(logoutBtn, "← Logout", LIGHTGRAY, 16)) {
+            if (DrawButton(logoutBtn, "← Logout", colors.buttonBg, colors, 16)) {
                 // Clear user data and return to login
                 currentUser = "";
                 isAdmin = false;
@@ -438,22 +480,22 @@ int main() {
             // Show current user info
             std::string userInfo = "Logged in as: " + currentUser;
             if (isAdmin) userInfo += " (Admin)";
-            DrawText(userInfo.c_str(), 600, 25, 16, DARKGRAY);
+            DrawText(userInfo.c_str(), 600, 25, 16, colors.accent);
             
-            DrawText("Clothing Store - Main Menu", 220, 80, 30, DARKBLUE);
+            DrawText("Clothing Store - Main Menu", 220, 80, 30, colors.primary);
 
             Rectangle btnView = { 300, 170, 200, 60 };
             Rectangle btnAdd = { 300, 250, 200, 60 };
             Rectangle btnOptions = { 300, 330, 200, 60 };
 
-            if (DrawButton(btnView, "View Products", LIGHTGRAY, 20)) state = STATE_VIEW_PRODUCTS;
-            if (DrawButton(btnAdd, "Add Product", LIGHTGRAY, 20)) state = STATE_ADD_PRODUCT;
-            if (DrawButton(btnOptions, "Options", LIGHTGRAY, 20)) state = STATE_OPTIONS;
+            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_VIEW_PRODUCTS;
+            if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
+            if (DrawButton(btnOptions, "Options", colors.buttonBg, colors, 20)) state = STATE_OPTIONS;
 
             Rectangle selector = { 280.0f, 170.0f + menuIndex * 80.0f, 240.0f, 60.0f };
-            DrawRectangleLinesEx(selector, 3, RED);
+            DrawRectangleLinesEx(selector, 3, colors.accent);
 
-            DrawText("Use Up/Down and Enter or click with mouse", 200, 480, 16, GRAY);
+            DrawText("Use Up/Down and Enter or click with mouse", 200, 480, 16, colors.accent);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load products once when entering view (or when not loaded)
@@ -461,12 +503,12 @@ int main() {
 
             // Back button
             Rectangle backBtn = { 20, 20, 80, 30 };
-            if (DrawButton(backBtn, "← Back", LIGHTGRAY, 16)) {
+            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
                 state = STATE_MENU;
             }
 
-            DrawText("Product List", 340, 30, 28, DARKBLUE);
-            DrawText("Press ESC or click Back to return to menu", 220, 70, 16, GRAY);
+            DrawText("Product List", 340, 30, 28, colors.primary);
+            DrawText("Press ESC or click Back to return to menu", 220, 70, 16, colors.accent);
 
             // Scrolling via mouse wheel and arrow keys
             float wheel = GetMouseWheelMove();
@@ -482,7 +524,7 @@ int main() {
 
             int startY = 120;
             if (products.empty()) {
-                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", 60, 180, 18, RED);
+                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", 60, 180, 18, colors.accent);
             } else {
                 for (size_t i = 0; i < products.size(); ++i) {
                     float y = startY + i * 30 + productsScroll;
@@ -500,25 +542,25 @@ int main() {
                         line += p.size;
                         line += ")";
                     }
-                    DrawText(line.c_str(), 120, (int)y, 20, BLACK);
+                    DrawText(line.c_str(), 120, (int)y, 20, colors.text);
                 }
             }
         }
         else if (state == STATE_ADD_PRODUCT) {
             // Back button
             Rectangle backBtn = { 20, 20, 80, 30 };
-            if (DrawButton(backBtn, "← Back", LIGHTGRAY, 16)) {
+            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
                 state = STATE_MENU;
             }
 
-            DrawText("Add Product", 320, 40, 28, DARKBLUE);
+            DrawText("Add Product", 320, 40, 28, colors.primary);
 
             if (currentUser.empty() || !isAdmin) {
-                DrawText("Admin privileges required to add products.", 180, 120, 20, RED);
-                DrawText("Please login with an admin account.", 220, 160, 18, GRAY);
+                DrawText("Admin privileges required to add products.", 180, 120, 20, colors.accent);
+                DrawText("Please login with an admin account.", 220, 160, 18, colors.text);
 
                 Rectangle btnToLogin = { 300, 220, 200, 50 };
-                if (DrawButton(btnToLogin, "Go to Login", LIGHTGRAY, 20)) {
+                if (DrawButton(btnToLogin, "Go to Login", colors.buttonBg, colors, 20)) {
                     // clear previous inputs and go to login
                     memset(username, 0, sizeof(username));
                     memset(password, 0, sizeof(password));
@@ -536,20 +578,20 @@ int main() {
                 Rectangle priceRect = { 240, (float)(y + 45), 200, 30 };
                 Rectangle sizeRect = { 520, (float)(y + 45), 140, 30 };
 
-                DrawText("Name:", 160, y, 20, BLACK);
-                DrawRectangleRec(nameRect, LIGHTGRAY);
-                DrawText(nameInput.c_str(), 250, y, 20, BLACK);
-                if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, RED);
+                DrawText("Name:", 160, y, 20, colors.text);
+                DrawRectangleRec(nameRect, colors.inputBg);
+                DrawText(nameInput.c_str(), 250, y, 20, colors.text);
+                if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
 
-                DrawText("Price:", 160, y + 50, 20, BLACK);
-                DrawRectangleRec(priceRect, LIGHTGRAY);
-                DrawText(priceInput.c_str(), 250, y + 50, 20, BLACK);
-                if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, RED);
+                DrawText("Price:", 160, y + 50, 20, colors.text);
+                DrawRectangleRec(priceRect, colors.inputBg);
+                DrawText(priceInput.c_str(), 250, y + 50, 20, colors.text);
+                if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
 
-                DrawText("Size:", 460, y + 50, 20, BLACK);
-                DrawRectangleRec(sizeRect, LIGHTGRAY);
-                DrawText(sizeInput.c_str(), 530, y + 50, 20, BLACK);
-                if (activeFieldAdd == 2) DrawRectangleLinesEx(sizeRect, 2, RED);
+                DrawText("Size:", 460, y + 50, 20, colors.text);
+                DrawRectangleRec(sizeRect, colors.inputBg);
+                DrawText(sizeInput.c_str(), 530, y + 50, 20, colors.text);
+                if (activeFieldAdd == 2) DrawRectangleLinesEx(sizeRect, 2, colors.accent);
 
                 // handle typing into the active field
                 int cp = GetCharPressed();
@@ -572,7 +614,7 @@ int main() {
                 Rectangle btnSave = { 260, 300, 160, 40 };
                 Rectangle btnCancel = { 440, 300, 160, 40 };
 
-                if (DrawButton(btnSave, "Save", LIGHTGRAY, 20)) {
+                if (DrawButton(btnSave, "Save", colors.primary, colors, 20)) {
                     double pr = 0.0; bool ok = false;
                     try {
                         size_t start = 0; while (start < priceInput.size() && !((priceInput[start] >= '0' && priceInput[start] <= '9') || priceInput[start]=='.' || priceInput[start]=='-')) start++;
@@ -593,21 +635,47 @@ int main() {
                         } else msg = "Failed to open file";
                     }
                 }
-                if (DrawButton(btnCancel, "Cancel", LIGHTGRAY, 20)) {
+                if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) {
                     state = STATE_MENU;
                 }
-                if (!msg.empty()) DrawText(msg.c_str(), 320, 360, 18, DARKGREEN);
+                if (!msg.empty()) DrawText(msg.c_str(), 320, 360, 18, colors.accent);
             }
         }
         else if (state == STATE_OPTIONS) {
             // Back button
             Rectangle backBtn = { 20, 20, 80, 30 };
-            if (DrawButton(backBtn, "← Back", LIGHTGRAY, 16)) {
+            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
                 state = STATE_MENU;
             }
 
-            DrawText("Options (placeholder)", 260, 200, 24, DARKBLUE);
-            DrawText("Press ESC or click Back to return to menu", 200, 240, 18, GRAY);
+            DrawText("Options", 350, 80, 32, colors.primary);
+            DrawText("Press ESC or click Back to return to menu", 200, 120, 16, colors.accent);
+            
+            // Theme selection section
+            DrawText("Theme:", 200, 200, 24, colors.text);
+            
+            Rectangle darkBtn = { 200, 240, 150, 40 };
+            Rectangle lightBtn = { 380, 240, 150, 40 };
+            
+            Color darkBtnColor = (currentTheme == THEME_DARK) ? colors.primary : colors.buttonBg;
+            Color lightBtnColor = (currentTheme == THEME_LIGHT) ? colors.primary : colors.buttonBg;
+            
+            if (DrawButton(darkBtn, "Dark Mode", darkBtnColor, colors, 20)) {
+                currentTheme = THEME_DARK;
+                colors = GetColorScheme(currentTheme);
+            }
+            if (DrawButton(lightBtn, "Light Mode", lightBtnColor, colors, 20)) {
+                currentTheme = THEME_LIGHT;
+                colors = GetColorScheme(currentTheme);
+            }
+            
+            // Theme description
+            std::string themeDesc = "Current theme: ";
+            themeDesc += (currentTheme == THEME_DARK) ? "Dark Mode" : "Light Mode";
+            DrawText(themeDesc.c_str(), 200, 320, 18, colors.accent);
+            
+            DrawText("Dark mode features a black background with purple accents.", 200, 350, 16, colors.text);
+            DrawText("Light mode features a white background with purple accents.", 200, 370, 16, colors.text);
         }
 
         EndDrawing();
