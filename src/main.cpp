@@ -5,6 +5,7 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <sstream>
 #include <cstring>
@@ -675,13 +676,16 @@ int main() {
                 static std::string nameInput;
                 static std::string priceInput;
                 static std::string sizeInput;
+                static std::string removeInput;
                 static std::string msg;
-                static int activeFieldAdd = 0; // 0=name,1=price,2=size
+                // 0=name,1=price,2=size,3=remove
+                static int activeFieldAdd = 0;
                 int y = 130;
 
                 Rectangle nameRect = { 240, (float)(y - 5), 420, 30 };
                 Rectangle priceRect = { 240, (float)(y + 45), 200, 30 };
                 Rectangle sizeRect = { 520, (float)(y + 45), 140, 30 };
+                Rectangle removeRect = { 240, (float)(y + 95), 420, 30 };
 
                 DrawText("Name:", 160, y, 20, BLACK);
                 DrawRectangleRec(nameRect, LIGHTGRAY);
@@ -694,30 +698,52 @@ int main() {
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, RED);
 
                 DrawText("Size:", 460, y + 50, 20, BLACK);
-                DrawRectangleRec(sizeRect, LIGHTGRAY);
-                DrawText(sizeInput.c_str(), 530, y + 50, 20, BLACK);
-                if (activeFieldAdd == 2) DrawRectangleLinesEx(sizeRect, 2, RED);
+                // Draw selectable size buttons instead of text input
+                static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
+                int btnW = 40;
+                int btnH = 30;
+                int gap = 8;
+                for (size_t si = 0; si < sizeOptions.size(); ++si) {
+                    Rectangle sb = { 520.0f + (float)si * (btnW + gap), (float)(y + 45), (float)btnW, (float)btnH };
+                    // highlight selected
+                    if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleRec(sb, LIGHTGRAY);
+                    if (DrawButton(sb, sizeOptions[si].c_str(), LIGHTGRAY, 18)) {
+                        sizeInput = sizeOptions[si];
+                        activeFieldAdd = 2;
+                    }
+                    // draw selection border
+                    if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, RED);
+                }
 
-                // handle typing into the active field
+                // Remove by name (admin)
+                DrawText("Remove product (name):", 80, y + 100, 20, BLACK);
+                DrawRectangleRec(removeRect, LIGHTGRAY);
+                DrawText(removeInput.c_str(), 250, y + 100, 20, BLACK);
+                if (activeFieldAdd == 3) DrawRectangleLinesEx(removeRect, 2, RED);
+
+                // handle typing into the active field (includes remove field)
                 int cp = GetCharPressed();
                 while (cp > 0) {
                     if (cp >= 32 && cp <= 125) {
                         if (activeFieldAdd == 0 && nameInput.size() < 120) nameInput.push_back((char)cp);
                         else if (activeFieldAdd == 1 && priceInput.size() < 32) priceInput.push_back((char)cp);
-                        else if (activeFieldAdd == 2 && sizeInput.size() < 32) sizeInput.push_back((char)cp);
+                        // activeFieldAdd == 2 is the size selector (buttons) so don't accept typed chars
+                        else if (activeFieldAdd == 3 && removeInput.size() < 120) removeInput.push_back((char)cp);
                     }
                     cp = GetCharPressed();
                 }
 
-                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 3;
+                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 4;
                 if (IsKeyPressed(KEY_BACKSPACE)) {
                     if (activeFieldAdd == 0 && !nameInput.empty()) nameInput.pop_back();
                     else if (activeFieldAdd == 1 && !priceInput.empty()) priceInput.pop_back();
-                    else if (activeFieldAdd == 2 && !sizeInput.empty()) sizeInput.pop_back();
+                    else if (activeFieldAdd == 3 && !removeInput.empty()) removeInput.pop_back();
+                    // size (activeFieldAdd==2) uses buttons; nothing to backspace
                 }
 
-                Rectangle btnSave = { 260, 300, 160, 40 };
-                Rectangle btnCancel = { 440, 300, 160, 40 };
+                Rectangle btnSave = { 220, 300, 160, 40 };
+                Rectangle btnRemove = { 400, 300, 160, 40 };
+                Rectangle btnCancel = { 580, 300, 160, 40 };
 
                 if (DrawButton(btnSave, "Save", LIGHTGRAY, 20)) {
                     double pr = 0.0; bool ok = false;
@@ -741,6 +767,51 @@ int main() {
                         } else msg = "Failed to open file";
                     }
                 }
+
+                if (DrawButton(btnRemove, "Remove", LIGHTGRAY, 20)) {
+                    // Remove products matching removeInput (case-insensitive name match)
+                    if (removeInput.empty()) {
+                        msg = "Enter a product name to remove";
+                    } else {
+                        std::ifstream ifs("data/products.txt");
+                        if (!ifs) { msg = "Failed to open products file"; }
+                        else {
+                            std::vector<std::string> lines;
+                            std::string line;
+                            int removed = 0;
+                            auto toLower = [](const std::string &s) {
+                                std::string out = s;
+                                std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c){ return std::tolower(c); });
+                                return out;
+                            };
+                            std::string target = toLower(removeInput);
+                            while (std::getline(ifs, line)) {
+                                if (line.empty()) continue;
+                                std::string nameOnly = line;
+                                size_t pos = line.find(';');
+                                if (pos != std::string::npos) nameOnly = line.substr(0, pos);
+                                if (toLower(nameOnly) == target) {
+                                    removed++;
+                                    continue; // skip this line
+                                }
+                                lines.push_back(line);
+                            }
+                            ifs.close();
+                            std::ofstream ofs("data/products.txt", std::ios::trunc);
+                            if (!ofs) { msg = "Failed to write products file"; }
+                            else {
+                                for (const auto &l : lines) ofs << l << "\n";
+                                ofs.close();
+                                if (removed > 0) {
+                                    msg = "Removed " + std::to_string(removed) + " product(s)";
+                                    removeInput.clear();
+                                    productsLoaded = false;
+                                } else msg = "No product matched that name";
+                            }
+                        }
+                    }
+                }
+
                 if (DrawButton(btnCancel, "Cancel", LIGHTGRAY, 20)) {
                     state = STATE_MENU;
                 }
