@@ -113,8 +113,15 @@ int main() {
     // Products storage
     struct Product { std::string name; double price; bool hasPrice; std::string size; };
     std::vector<Product> products;
+    std::vector<Product> filteredProducts; // For search/sort results
     bool productsLoaded = false;
     float productsScroll = 0.0f;
+    
+    // Search and sort variables
+    char searchInput[64] = "";
+    bool searchActive = false;
+    int sortMode = 0; // 0=default, 1=price asc, 2=price desc, 3=size asc, 4=size desc
+    bool needsResort = true;
 
     auto LoadProducts = [&](const std::string &path) -> bool {
         products.clear();
@@ -159,6 +166,67 @@ int main() {
         });
 
         return true;
+    };
+    
+    auto FilterAndSortProducts = [&]() {
+        // Start with all products
+        filteredProducts.clear();
+        std::string searchTerm = searchInput;
+        std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::tolower);
+        
+        // Filter by search term
+        for (const auto& product : products) {
+            if (searchTerm.empty()) {
+                filteredProducts.push_back(product);
+            } else {
+                std::string productName = product.name;
+                std::transform(productName.begin(), productName.end(), productName.begin(), ::tolower);
+                if (productName.find(searchTerm) != std::string::npos) {
+                    filteredProducts.push_back(product);
+                }
+            }
+        }
+        
+        // Sort filtered products
+        switch (sortMode) {
+            case 1: // Price ascending
+                std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
+                    if (a.hasPrice != b.hasPrice) return a.hasPrice; // priced items first
+                    if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
+                    return a.price < b.price;
+                });
+                break;
+            case 2: // Price descending
+                std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
+                    if (a.hasPrice != b.hasPrice) return a.hasPrice; // priced items first
+                    if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
+                    return a.price > b.price;
+                });
+                break;
+            case 3: // Size ascending
+                std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
+                    if (a.size.empty() != b.size.empty()) return !a.size.empty(); // items with size first
+                    if (a.size.empty() && b.size.empty()) return a.name < b.name;
+                    return a.size < b.size;
+                });
+                break;
+            case 4: // Size descending
+                std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
+                    if (a.size.empty() != b.size.empty()) return !a.size.empty(); // items with size first
+                    if (a.size.empty() && b.size.empty()) return a.name < b.name;
+                    return a.size > b.size;
+                });
+                break;
+            default: // Default sorting (original logic)
+                std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
+                    if (a.hasPrice != b.hasPrice) return a.hasPrice; // true before false
+                    if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
+                    return a.price < b.price;
+                });
+                break;
+        }
+        
+        needsResort = false;
     };
     
     auto SaveUser = [&](const std::string &username, const std::string &password) -> bool {
@@ -246,12 +314,11 @@ int main() {
             }
         }
         else if (state == STATE_MENU) {
-            if (IsKeyPressed(KEY_DOWN)) menuIndex = (menuIndex + 1) % 3;
-            if (IsKeyPressed(KEY_UP)) menuIndex = (menuIndex + 2) % 3;
+            if (IsKeyPressed(KEY_DOWN)) menuIndex = (menuIndex + 1) % 2;
+            if (IsKeyPressed(KEY_UP)) menuIndex = (menuIndex + 1) % 2;
             if (IsKeyPressed(KEY_ENTER)) {
                 if (menuIndex == 0) state = STATE_VIEW_PRODUCTS;
                 else if (menuIndex == 1) state = STATE_ADD_PRODUCT;
-                else if (menuIndex == 2) state = STATE_OPTIONS;
             }
         }
 
@@ -435,6 +502,12 @@ int main() {
                 state = STATE_LOGIN;
             }
             
+            // Options button in top right, next to user info
+            Rectangle optionsBtn = { 520, 20, 70, 30 };
+            if (DrawButton(optionsBtn, "Options", LIGHTGRAY, 16)) {
+                state = STATE_OPTIONS;
+            }
+            
             // Show current user info
             std::string userInfo = "Logged in as: " + currentUser;
             if (isAdmin) userInfo += " (Admin)";
@@ -444,20 +517,26 @@ int main() {
 
             Rectangle btnView = { 300, 170, 200, 60 };
             Rectangle btnAdd = { 300, 250, 200, 60 };
-            Rectangle btnOptions = { 300, 330, 200, 60 };
 
             if (DrawButton(btnView, "View Products", LIGHTGRAY, 20)) state = STATE_VIEW_PRODUCTS;
             if (DrawButton(btnAdd, "Add Product", LIGHTGRAY, 20)) state = STATE_ADD_PRODUCT;
-            if (DrawButton(btnOptions, "Options", LIGHTGRAY, 20)) state = STATE_OPTIONS;
 
             Rectangle selector = { 280.0f, 170.0f + menuIndex * 80.0f, 240.0f, 60.0f };
             DrawRectangleLinesEx(selector, 3, RED);
 
-            DrawText("Use Up/Down and Enter or click with mouse", 200, 480, 16, GRAY);
+            DrawText("Use Up/Down and Enter or click with mouse", 200, 400, 16, GRAY);
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load products once when entering view (or when not loaded)
-            if (!productsLoaded) productsLoaded = LoadProducts("data/products.txt");
+            if (!productsLoaded) {
+                productsLoaded = LoadProducts("data/products.txt");
+                needsResort = true;
+            }
+            
+            // Filter and sort products if needed
+            if (needsResort) {
+                FilterAndSortProducts();
+            }
 
             // Back button
             Rectangle backBtn = { 20, 20, 80, 30 };
@@ -465,29 +544,97 @@ int main() {
                 state = STATE_MENU;
             }
 
-            DrawText("Product List", 340, 30, 28, DARKBLUE);
-            DrawText("Press ESC or click Back to return to menu", 220, 70, 16, GRAY);
+            DrawText("Product List", 320, 30, 28, DARKBLUE);
+            
+            // Search input
+            DrawText("Search:", 20, 80, 18, BLACK);
+            Rectangle searchRect = { 80, 75, 200, 30 };
+            DrawRectangleRec(searchRect, LIGHTGRAY);
+            DrawText(searchInput, 85, 80, 18, BLACK);
+            if (searchActive) DrawRectangleLinesEx(searchRect, 2, BLUE);
+            
+            // Handle search input
+            Vector2 mouse = GetMousePosition();
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                searchActive = CheckCollisionPointRec(mouse, searchRect);
+            }
+            
+            if (searchActive) {
+                int key = GetCharPressed();
+                while (key > 0) {
+                    if (key >= 32 && key <= 125 && strlen(searchInput) < 63) {
+                        int len = strlen(searchInput);
+                        searchInput[len] = (char)key;
+                        searchInput[len + 1] = '\0';
+                        needsResort = true;
+                    }
+                    key = GetCharPressed();
+                }
+                if (IsKeyPressed(KEY_BACKSPACE) && strlen(searchInput) > 0) {
+                    searchInput[strlen(searchInput) - 1] = '\0';
+                    needsResort = true;
+                }
+            }
+            
+            // Sorting buttons
+            Rectangle sortPriceAscBtn = { 300, 75, 80, 30 };
+            Rectangle sortPriceDescBtn = { 390, 75, 80, 30 };
+            Rectangle sortSizeAscBtn = { 480, 75, 80, 30 };
+            Rectangle sortSizeDescBtn = { 570, 75, 80, 30 };
+            Rectangle sortDefaultBtn = { 670, 75, 80, 30 };
+            
+            if (DrawButton(sortPriceAscBtn, "Price ^  ", (sortMode == 1) ? LIME : LIGHTGRAY, 14)) {
+                sortMode = 1;
+                needsResort = true;
+            }
+            if (DrawButton(sortPriceDescBtn, "Price v  ", (sortMode == 2) ? LIME : LIGHTGRAY, 14)) {
+                sortMode = 2;
+                needsResort = true;
+            }
+            if (DrawButton(sortSizeAscBtn, "Size ^   ", (sortMode == 3) ? LIME : LIGHTGRAY, 14)) {
+                sortMode = 3;
+                needsResort = true;
+            }
+            if (DrawButton(sortSizeDescBtn, "Size v   ", (sortMode == 4) ? LIME : LIGHTGRAY, 14)) {
+                sortMode = 4;
+                needsResort = true;
+            }
+            if (DrawButton(sortDefaultBtn, "Default", (sortMode == 0) ? LIME : LIGHTGRAY, 14)) {
+                sortMode = 0;
+                needsResort = true;
+            }
 
+            // Show search/sort results info
+            if (!searchInput[0] && sortMode == 0) {
+                DrawText("Showing all products", 20, 115, 16, GRAY);
+            } else {
+                std::string info = "Showing " + std::to_string(filteredProducts.size()) + " of " + std::to_string(products.size()) + " products";
+                if (searchInput[0]) info += " (filtered)";
+                DrawText(info.c_str(), 20, 115, 16, GRAY);
+            }
+            
             // Scrolling via mouse wheel and arrow keys
             float wheel = GetMouseWheelMove();
             productsScroll -= wheel * 20.0f; // wheel up -> move list up
             if (IsKeyDown(KEY_DOWN)) productsScroll -= 2.0f;
             if (IsKeyDown(KEY_UP)) productsScroll += 2.0f;
 
-            // Clamp scroll based on content
-            float contentHeight = (float)products.size() * 30.0f;
+            // Clamp scroll based on filtered content
+            float contentHeight = (float)filteredProducts.size() * 30.0f;
             float minScroll = std::min(0.0f, 420.0f - contentHeight);
             if (productsScroll < minScroll) productsScroll = minScroll;
             if (productsScroll > 0) productsScroll = 0;
 
-            int startY = 120;
+            int startY = 140;
             if (products.empty()) {
-                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", 60, 180, 18, RED);
+                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", 60, 200, 18, RED);
+            } else if (filteredProducts.empty()) {
+                DrawText("No products match your search criteria.", 240, 200, 18, ORANGE);
             } else {
-                for (size_t i = 0; i < products.size(); ++i) {
+                for (size_t i = 0; i < filteredProducts.size(); ++i) {
                     float y = startY + i * 30 + productsScroll;
-                    if (y < 100 - 30 || y > screenHeight) continue; // simple culling
-                    const auto &p = products[i];
+                    if (y < 120 - 30 || y > screenHeight) continue; // simple culling
+                    const auto &p = filteredProducts[i];
                     std::string line = p.name;
                     if (p.hasPrice) {
                         std::ostringstream ss;
@@ -500,7 +647,7 @@ int main() {
                         line += p.size;
                         line += ")";
                     }
-                    DrawText(line.c_str(), 120, (int)y, 20, BLACK);
+                    DrawText(line.c_str(), 20, (int)y, 20, BLACK);
                 }
             }
         }
@@ -589,7 +736,8 @@ int main() {
                             ofs << "\n";
                             ofs.close();
                             msg = "Product saved";
-                            nameInput.clear(); priceInput.clear(); sizeInput.clear(); productsLoaded = false;
+                            nameInput.clear(); priceInput.clear(); sizeInput.clear(); 
+                            productsLoaded = false; needsResort = true;
                         } else msg = "Failed to open file";
                     }
                 }
