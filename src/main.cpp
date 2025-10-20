@@ -154,7 +154,7 @@ int main() {
     std::string regMessage = "";
 
     // Products storage
-    struct Product { std::string name; double price; bool hasPrice; std::string size; };
+    struct Product { std::string name; double price; bool hasPrice; std::string size; std::string description; };
     std::vector<Product> products;
     std::vector<Product> filteredProducts; // For search/sort results
     bool productsLoaded = false;
@@ -173,32 +173,42 @@ int main() {
         std::string line;
         while (std::getline(ifs, line)) {
             if (line.empty()) continue;
-            size_t pos = line.find(';');
-            if (pos != std::string::npos) {
-                std::string name = line.substr(0, pos);
-                std::string rest = line.substr(pos + 1);
-                // rest can be price or price;size
-                std::string priceStr = rest;
-                std::string sizeStr;
-                size_t pos2 = rest.find(';');
-                if (pos2 != std::string::npos) {
-                    priceStr = rest.substr(0, pos2);
-                    sizeStr = rest.substr(pos2 + 1);
+            // Split by ';' into tokens: name;price;size;description (description optional, may contain semicolons)
+            std::vector<std::string> tokens;
+            size_t start = 0;
+            while (true) {
+                size_t p = line.find(';', start);
+                if (p == std::string::npos) {
+                    tokens.push_back(line.substr(start));
+                    break;
                 }
-                double price = 0.0;
-                bool ok = false;
+                tokens.push_back(line.substr(start, p - start));
+                start = p + 1;
+            }
+            std::string name = tokens.size() > 0 ? tokens[0] : std::string();
+            std::string priceStr = tokens.size() > 1 ? tokens[1] : std::string();
+            std::string sizeStr = tokens.size() > 2 ? tokens[2] : std::string();
+            std::string descStr;
+            if (tokens.size() > 3) {
+                // join remaining tokens as description (in case description contains ';')
+                descStr = tokens[3];
+                for (size_t i = 4; i < tokens.size(); ++i) {
+                    descStr += ";" + tokens[i];
+                }
+            }
+
+            double price = 0.0;
+            bool ok = false;
+            if (!priceStr.empty()) {
                 try {
-                    // remove possible currency symbols and spaces
-                    size_t start = 0;
-                    while (start < priceStr.size() && !((priceStr[start] >= '0' && priceStr[start] <= '9') || priceStr[start] == '.' || priceStr[start] == '-')) start++;
-                    std::string trimmed = priceStr.substr(start);
+                    size_t s = 0;
+                    while (s < priceStr.size() && !((priceStr[s] >= '0' && priceStr[s] <= '9') || priceStr[s] == '.' || priceStr[s] == '-')) s++;
+                    std::string trimmed = priceStr.substr(s);
                     price = std::stod(trimmed);
                     ok = true;
                 } catch (...) { ok = false; }
-                products.push_back({ name, price, ok, sizeStr });
-            } else {
-                products.push_back({ line, 0.0, false, std::string() });
             }
+            products.push_back({ name, price, ok, sizeStr, descStr });
         }
 
         // Sort products: priced items first (ascending by price), then unpriced items
@@ -664,6 +674,7 @@ int main() {
             } else if (filteredProducts.empty()) {
                 DrawText("No products match your search criteria.", 240, 200, 18, ORANGE);
             } else {
+                static int viewDescriptionIndex = -1;
                 for (size_t i = 0; i < filteredProducts.size(); ++i) {
                     float y = startY + i * 30 + productsScroll;
                     if (y < 120 - 30 || y > screenHeight) continue; // simple culling
@@ -681,6 +692,46 @@ int main() {
                         line += ")";
                     }
                     DrawText(line.c_str(), 20, (int)y, 20, colors.text);
+
+                    // Draw 'View' button to show description
+                    Rectangle viewBtn = { 600, y - 6, 80, 28 };
+                    if (DrawButton(viewBtn, "View", colors.buttonBg, colors, 14)) {
+                        viewDescriptionIndex = (int)i;
+                    }
+                }
+
+                // Description modal
+                if (viewDescriptionIndex >= 0 && viewDescriptionIndex < (int)filteredProducts.size()) {
+                    const auto &p = filteredProducts[viewDescriptionIndex];
+                    Rectangle modal = { 100, 140, 600, 320 };
+                    DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f));
+                    DrawRectangleLinesEx(modal, 2, colors.accent);
+                    DrawText(p.name.c_str(), (int)modal.x + 20, (int)modal.y + 18, 24, colors.text);
+
+                    std::string desc = p.description.empty() ? "(No description)" : p.description;
+                    int descY = (int)modal.y + 58;
+                    int maxWidth = (int)modal.width - 40;
+                    std::istringstream iss(desc);
+                    std::string word;
+                    std::string lineBuf;
+                    while (iss >> word) {
+                        std::string tryLine = lineBuf.empty() ? word : (lineBuf + " " + word);
+                        if (MeasureText(tryLine.c_str(), 18) > maxWidth) {
+                            DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
+                            descY += 22;
+                            lineBuf = word;
+                        } else {
+                            lineBuf = tryLine;
+                        }
+                    }
+                    if (!lineBuf.empty()) {
+                        DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
+                    }
+
+                    Rectangle closeBtn = { modal.x + modal.width - 100, modal.y + modal.height - 44, 80, 34 };
+                    if (DrawButton(closeBtn, "Close", colors.buttonBg, colors, 16)) {
+                        viewDescriptionIndex = -1;
+                    }
                 }
             }
         }
