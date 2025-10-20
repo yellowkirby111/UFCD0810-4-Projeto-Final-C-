@@ -539,7 +539,7 @@ int main() {
             
             // Options button in top right, next to user info
             Rectangle optionsBtn = { 520, 20, 70, 30 };
-            if (DrawButton(optionsBtn, "Options", LIGHTGRAY, 16)) {
+            if (DrawButton(optionsBtn, "Options", colors.buttonBg, colors, 16)) {
                 state = STATE_OPTIONS;
             }
             
@@ -553,8 +553,8 @@ int main() {
             Rectangle btnView = { 300, 170, 200, 60 };
             Rectangle btnAdd = { 300, 250, 200, 60 };
 
-            if (DrawButton(btnView, "View Products", LIGHTGRAY, 20)) state = STATE_VIEW_PRODUCTS;
-            if (DrawButton(btnAdd, "Add Product", LIGHTGRAY, 20)) state = STATE_ADD_PRODUCT;
+            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_VIEW_PRODUCTS;
+            if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
 
             Rectangle selector = { 280.0f, 170.0f + menuIndex * 80.0f, 240.0f, 60.0f };
             DrawRectangleLinesEx(selector, 3, RED);
@@ -618,23 +618,23 @@ int main() {
             Rectangle sortSizeDescBtn = { 570, 75, 80, 30 };
             Rectangle sortDefaultBtn = { 670, 75, 80, 30 };
             
-            if (DrawButton(sortPriceAscBtn, "Price ^  ", (sortMode == 1) ? LIME : LIGHTGRAY, 14)) {
+            if (DrawButton(sortPriceAscBtn, "Price ^  ", (sortMode == 1) ? LIME : LIGHTGRAY, colors, 14)) {
                 sortMode = 1;
                 needsResort = true;
             }
-            if (DrawButton(sortPriceDescBtn, "Price v  ", (sortMode == 2) ? LIME : LIGHTGRAY, 14)) {
+            if (DrawButton(sortPriceDescBtn, "Price v  ", (sortMode == 2) ? LIME : LIGHTGRAY, colors, 14)) {
                 sortMode = 2;
                 needsResort = true;
             }
-            if (DrawButton(sortSizeAscBtn, "Size ^   ", (sortMode == 3) ? LIME : LIGHTGRAY, 14)) {
+            if (DrawButton(sortSizeAscBtn, "Size ^   ", (sortMode == 3) ? LIME : LIGHTGRAY, colors, 14)) {
                 sortMode = 3;
                 needsResort = true;
             }
-            if (DrawButton(sortSizeDescBtn, "Size v   ", (sortMode == 4) ? LIME : LIGHTGRAY, 14)) {
+            if (DrawButton(sortSizeDescBtn, "Size v   ", (sortMode == 4) ? LIME : LIGHTGRAY, colors, 14)) {
                 sortMode = 4;
                 needsResort = true;
             }
-            if (DrawButton(sortDefaultBtn, "Default", (sortMode == 0) ? LIME : LIGHTGRAY, 14)) {
+            if (DrawButton(sortDefaultBtn, "Default", (sortMode == 0) ? LIME : LIGHTGRAY, colors, 14)) {
                 sortMode = 0;
                 needsResort = true;
             }
@@ -740,7 +740,7 @@ int main() {
                 for (size_t si = 0; si < sizeOptions.size(); ++si) {
                     Rectangle sb = { 520.0f + (float)si * (btnW + gap), (float)(y + 45), (float)btnW, (float)btnH };
                     // draw button; clicking selects the size
-                    if (DrawButton(sb, sizeOptions[si].c_str(), LIGHTGRAY, 18)) {
+                    if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) {
                         sizeInput = sizeOptions[si];
                         activeFieldAdd = 2; // mark size selected
                     }
@@ -800,7 +800,7 @@ int main() {
                     }
                 }
 
-                if (DrawButton(btnRemove, "Remove", LIGHTGRAY, 20)) {
+                if (DrawButton(btnRemove, "Remove", colors.buttonBg, colors, 20)) {
                     if (removeInput.empty()) {
                         msg = "Enter a product name to remove";
                     } else {
@@ -843,7 +843,7 @@ int main() {
                     }
                 }
 
-                if (DrawButton(btnCancel, "Cancel", LIGHTGRAY, 20)) {
+                if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) {
                     state = STATE_MENU;
                 }
                 if (!msg.empty()) DrawText(msg.c_str(), 320, 360, 18, colors.accent);
