@@ -105,7 +105,8 @@ int main() {
     // Window mode handling: support Windowed, Windowed-Fullscreen (bordered window resized to monitor),
     // and Fullscreen (real fullscreen). Use ApplyWindowMode(...) to change modes.
     enum WindowMode { WM_WINDOWED = 0, WM_WINDOWED_FULLSCREEN = 1, WM_FULLSCREEN = 2 };
-    WindowMode currentWindowMode = WM_WINDOWED;
+    // Start in windowed-fullscreen by default so the app fills the screen but remains a window (bordered)
+    WindowMode currentWindowMode = WM_WINDOWED_FULLSCREEN;
 
     auto ApplyWindowMode = [&](WindowMode mode) {
         int mw = GetMonitorWidth(0);
@@ -356,8 +357,8 @@ int main() {
         }
         // Global fullscreen toggle (F11) - use smart toggle to avoid stretched scaling
         if (IsKeyPressed(KEY_F11)) {
-            // Toggle between fullscreen and windowed fullscreen (or windowed) in a sensible way:
-            if (currentWindowMode == WM_FULLSCREEN) ApplyWindowMode(WM_WINDOWED);
+            // Toggle between exclusive fullscreen and windowed-fullscreen (our base mode)
+            if (currentWindowMode == WM_FULLSCREEN) ApplyWindowMode(WM_WINDOWED_FULLSCREEN);
             else ApplyWindowMode(WM_FULLSCREEN);
         }
         
