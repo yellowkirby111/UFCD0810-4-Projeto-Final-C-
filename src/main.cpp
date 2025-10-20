@@ -669,13 +669,6 @@ int main() {
                 colors = GetColorScheme(currentTheme);
             }
             
-            // Theme description
-            std::string themeDesc = "Current theme: ";
-            themeDesc += (currentTheme == THEME_DARK) ? "Dark Mode" : "Light Mode";
-            DrawText(themeDesc.c_str(), 200, 320, 18, colors.accent);
-            
-            DrawText("Dark mode features a black background with purple accents.", 200, 350, 16, colors.text);
-            DrawText("Light mode features a white background with purple accents.", 200, 370, 16, colors.text);
         }
 
         EndDrawing();
