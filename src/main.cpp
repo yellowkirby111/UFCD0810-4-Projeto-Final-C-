@@ -381,21 +381,6 @@ int main() {
         BeginDrawing();
         ClearBackground(colors.background);
 
-<<<<<<< HEAD
-        // --- Responsive layout helpers (use percentages relative to current window size) ---
-    int sw = GetScreenWidth();
-    int sh = GetScreenHeight();
-    auto RX = [&](float px)->float { return px * (float)sw; }; // relative to width (0..1)
-    auto RY = [&](float py)->float { return py * (float)sh; };// relative to height (0..1)
-    auto RW = [&](float pw)->float { return pw * (float)sw; };
-    auto RH = [&](float ph)->float { return ph * (float)sh; };
-    int centerX = sw / 2;
-        // --- end helpers ---
- 
-        if (state == STATE_LOGIN) {
-            // place title near top-center
-            DrawText("Login", centerX - MeasureText("Login", 32)/2, RY(0.12f), 32, colors.primary);
-=======
         // Responsive helpers (used by the drawing/input code)
         int sw = GetScreenWidth();
         int sh = GetScreenHeight();
@@ -404,7 +389,6 @@ int main() {
         auto RW = [&](float pw)->int { return (int)(pw * sw); }; // relative width
         auto RH = [&](float ph)->int { return (int)(ph * sh); }; // relative height
         int centerX = sw / 2;
->>>>>>> fd33614a0c3a321dd59535f4bdaeec83f31383e7
 
         if (state == STATE_LOGIN) {
             // place title near top-center (scaled)
@@ -758,11 +742,7 @@ int main() {
                     std::string lineBuf;
                     while (iss >> word) {
                         std::string tryLine = lineBuf.empty() ? word : (lineBuf + " " + word);
-<<<<<<< HEAD
-                        if (MeasureText(tryLine.c_str(), 18) > maxWidth) { DrawText(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text); descY += 22; lineBuf = word; }
-=======
                         if (MeasureTextScaled(tryLine.c_str(), 18) > maxWidth) { DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text); descY += 22; lineBuf = word; }
->>>>>>> fd33614a0c3a321dd59535f4bdaeec83f31383e7
                         else lineBuf = tryLine;
                     }
                     if (!lineBuf.empty()) DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
@@ -784,7 +764,6 @@ int main() {
             } else {
                 // Responsive, centered Add Product form
                 static std::string nameInput, priceInput, sizeInput, removeInput, msg;
-<<<<<<< HEAD
                 static int activeFieldAdd = 0; // 0=name,1=price,2=size,3=remove
 
                 float sectionTop = RY(0.08f);
@@ -811,21 +790,6 @@ int main() {
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
 
                 // Size selection (centered row) — placed below the price input
-=======
-                static int activeFieldAdd = 0;
-                float baseY = RY(0.18f);
-                Rectangle nameRect = { (float)RX(0.30f), baseY - RH(0.01f), (float)RW(0.55f), (float)RH(0.06f) };
-                Rectangle priceRect = { (float)RX(0.30f), baseY + RH(0.10f), (float)RW(0.28f), (float)RH(0.06f) };
-                Rectangle sizeRect = { priceRect.x + priceRect.width + RW(0.03f), priceRect.y, (float)RW(0.18f), (float)RH(0.06f) };
-                Rectangle removeRect = { nameRect.x, priceRect.y + RH(0.12f), nameRect.width, nameRect.height };
-                DrawTextScaled("Name:", RX(0.10f), baseY, 20, colors.text);
-                DrawRectangleRec(nameRect, colors.inputBg); DrawTextScaled(nameInput.c_str(), (int)nameRect.x + 6, (int)nameRect.y + 6, 20, colors.text);
-                if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
-                DrawTextScaled("Price:", RX(0.10f), priceRect.y, 20, colors.text);
-                DrawRectangleRec(priceRect, colors.inputBg); DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 6, (int)priceRect.y + 6, 20, colors.text);
-                if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
-                DrawTextScaled("Size:", priceRect.x + priceRect.width + 6, priceRect.y, 20, colors.text);
->>>>>>> fd33614a0c3a321dd59535f4bdaeec83f31383e7
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
                 float sbtnW = RW(0.10f), sbtnH = inputH, sGap = RW(0.02f);
                 float totalS = sbtnW * (float)sizeOptions.size() + sGap * ((float)sizeOptions.size() - 1.0f);
@@ -840,17 +804,12 @@ int main() {
                     if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) { sizeInput = sizeOptions[si]; activeFieldAdd = 2; }
                     if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, RED);
                 }
-<<<<<<< HEAD
 
                 // Remove input (moved below size buttons) - add extra vertical spacing
                 removeRect.y = sBtnsY + sbtnH + RH(0.06f); // increased gap for clearer separation
                 DrawText("Remove product:", removeRect.x - RW(0.18f), removeRect.y + 4, 20, colors.text);
                 DrawRectangleRec(removeRect, LIGHTGRAY);
                 DrawText(removeInput.c_str(), (int)removeRect.x + 6, (int)removeRect.y + 6, 20, BLACK);
-=======
-                DrawText("Remove product:", RX(0.05f), removeRect.y, 20, colors.text);
-                DrawRectangleRec(removeRect, LIGHTGRAY); DrawTextScaled(removeInput.c_str(), (int)removeRect.x + 6, (int)removeRect.y + 6, 20, BLACK);
->>>>>>> fd33614a0c3a321dd59535f4bdaeec83f31383e7
                 if (activeFieldAdd == 3) DrawRectangleLinesEx(removeRect, 2, RED);
 
                 // Input handling (preserve behavior)
@@ -890,23 +849,13 @@ int main() {
                     }
                 }
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) state = STATE_MENU;
-<<<<<<< HEAD
-                if (!msg.empty()) DrawText(msg.c_str(), centerX - MeasureText(msg.c_str(), 18)/2, actionY + actionH + RH(0.03f), 18, colors.accent);
-=======
                 if (!msg.empty()) DrawTextScaled(msg.c_str(), centerX - MeasureTextScaled(msg.c_str(), 18)/2, RY(0.58f), 18, colors.accent);
->>>>>>> fd33614a0c3a321dd59535f4bdaeec83f31383e7
             }
          }
          else if (state == STATE_OPTIONS) {
               // Back button
              Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
              if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
-<<<<<<< HEAD
-                 state = STATE_MENU;
-             }
-             DrawText("Options", centerX - MeasureText("Options", 32)/2, RY(0.12f), 32, colors.primary);
-             DrawText("Press ESC or click Back to return to menu", centerX - MeasureText("Press ESC or click Back to return to menu", 16)/2, RY(0.17f), 16, colors.accent);
-=======
                   state = STATE_MENU;
               }
              DrawTextScaled("Options", centerX - MeasureTextScaled("Options", 32)/2, RY(0.12f), 32, colors.primary);
@@ -918,7 +867,6 @@ int main() {
              
              Rectangle darkBtn = { 200, 240, 150, 40 };
              Rectangle lightBtn = { 380, 240, 150, 40 };
->>>>>>> fd33614a0c3a321dd59535f4bdaeec83f31383e7
              
              // Theme selection section (responsive layout)
              float sectionTop = RY(0.22f);
