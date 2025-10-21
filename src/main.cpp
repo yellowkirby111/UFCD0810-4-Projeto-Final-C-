@@ -739,106 +739,152 @@ int main() {
             }
         }
         else if (state == STATE_ADD_PRODUCT) {
+            // Back button
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
             if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+
             DrawTextScaled("Add Product", centerX - MeasureTextScaled("Add Product", 28)/2, RY(0.05f), 28, colors.primary);
 
             if (currentUser.empty() || !isAdmin) {
-                DrawText("Admin privileges required to add products.", centerX - MeasureText("Admin privileges required to add products.", 20)/2, RY(0.20f), 20, colors.accent);
-                DrawText("Please login with an admin account.", centerX - MeasureText("Please login with an admin account.", 18)/2, RY(0.26f), 18, colors.text);
+                DrawTextScaled("Admin privileges required to add products.", centerX - MeasureTextScaled("Admin privileges required to add products.", 20)/2, RY(0.20f), 20, colors.accent);
+                DrawTextScaled("Please login with an admin account.", centerX - MeasureTextScaled("Please login with an admin account.", 18)/2, RY(0.26f), 18, colors.text);
                 Rectangle btnToLogin = { (float)(centerX - RW(0.15f)), RY(0.36f), (float)RW(0.30f), (float)RH(0.08f) };
                 if (DrawButton(btnToLogin, "Go to Login", colors.buttonBg, colors, 20)) { memset(username,0,sizeof(username)); memset(password,0,sizeof(password)); state = STATE_LOGIN; }
             } else {
                 // Responsive, centered Add Product form
                 static std::string nameInput, priceInput, sizeInput, removeInput, msg;
-                static int activeFieldAdd = 0; // 0=name,1=price,2=size,3=remove
+                static int activeFieldAdd = 0; // 0=name,1=price,2=remove
 
-                float sectionTop = RY(0.08f);
-                DrawText("Add Product", centerX - MeasureText("Add Product", 28)/2, RY(0.05f), 28, colors.primary);
-
-                float inputW = RW(0.70f);
+                // Layout metrics
+                float topY = RY(0.10f);
+                float labelX = RX(0.12f);
+                float inputX = RX(0.30f);
+                float fullW = RW(0.58f);
                 float inputH = RH(0.06f);
-                float gapV = RH(0.04f);
+                float gapV = RH(0.035f);
 
-                Rectangle nameRect = { centerX - inputW/2.0f, sectionTop + gapV, inputW, inputH };
-                Rectangle priceRect = { centerX - RW(0.35f), nameRect.y + inputH + gapV, RW(0.28f), inputH };
-                Rectangle removeRect = { centerX - inputW/2.0f, priceRect.y + inputH + gapV, inputW, inputH };
+                Rectangle nameRect = { inputX, topY, fullW, inputH };
+                Rectangle priceRect = { inputX, nameRect.y + inputH + gapV, fullW * 0.4f, inputH };
+                Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
+                Rectangle removeRect = { inputX, sizeAreaRect.y + inputH + gapV, fullW, inputH };
 
-                // Draw name input
-                DrawText("Name:", nameRect.x - RW(0.08f), nameRect.y + 4, 20, colors.text);
+                // Draw labels and inputs
+                DrawTextScaled("Name:", labelX, (int)nameRect.y + 6, 20, colors.text);
                 DrawRectangleRec(nameRect, colors.inputBg);
-                DrawText(nameInput.c_str(), (int)nameRect.x + 6, (int)nameRect.y + 6, 20, colors.text);
+                DrawTextScaled(nameInput.c_str(), (int)nameRect.x + 8, (int)nameRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
 
-                // Draw price input
-                DrawText("Price:", priceRect.x - RW(0.08f), priceRect.y + 4, 20, colors.text);
+                DrawTextScaled("Price:", labelX, (int)priceRect.y + 6, 20, colors.text);
                 DrawRectangleRec(priceRect, colors.inputBg);
-                DrawText(priceInput.c_str(), (int)priceRect.x + 6, (int)priceRect.y + 6, 20, colors.text);
+                DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
 
-                // Size selection (centered row) — placed below the price input
+                // Size selection — buttons centered inside sizeAreaRect
+                DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
-                float sbtnW = RW(0.10f), sbtnH = inputH, sGap = RW(0.02f);
+                float sbtnW = RW(0.09f), sbtnH = inputH * 0.9f, sGap = RW(0.02f);
                 float totalS = sbtnW * (float)sizeOptions.size() + sGap * ((float)sizeOptions.size() - 1.0f);
-                float startSx = centerX - totalS/2.0f;
-                float sBtnsY = priceRect.y + inputH + RH(0.02f);
-
-                // Size label above buttons
-                DrawText("Size:", centerX - MeasureText("Size:", 20)/2, sBtnsY - RH(0.045f), 20, colors.text);
-
+                float startSx = inputX + (fullW - totalS) / 2.0f;
+                float sBtnsY = sizeAreaRect.y + (sizeAreaRect.height - sbtnH) / 2.0f;
+                Vector2 mouse = GetMousePosition();
                 for (size_t si = 0; si < sizeOptions.size(); ++si) {
                     Rectangle sb = { startSx + si * (sbtnW + sGap), sBtnsY, sbtnW, sbtnH };
-                    if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) { sizeInput = sizeOptions[si]; activeFieldAdd = 2; }
-                    if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, RED);
+                    if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) { sizeInput = sizeOptions[si]; }
+                    if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, colors.accent);
                 }
 
-                // Remove input (moved below size buttons) - add extra vertical spacing
-                removeRect.y = sBtnsY + sbtnH + RH(0.06f); // increased gap for clearer separation
-                DrawText("Remove product:", removeRect.x - RW(0.18f), removeRect.y + 4, 20, colors.text);
-                DrawRectangleRec(removeRect, LIGHTGRAY);
-                DrawText(removeInput.c_str(), (int)removeRect.x + 6, (int)removeRect.y + 6, 20, BLACK);
-                if (activeFieldAdd == 3) DrawRectangleLinesEx(removeRect, 2, RED);
+                // Remove input
+                DrawTextScaled("Remove product:", labelX, (int)removeRect.y + 6, 20, colors.text);
+                DrawRectangleRec(removeRect, colors.inputBg);
+                DrawTextScaled(removeInput.c_str(), (int)removeRect.x + 8, (int)removeRect.y + 6, 18, colors.text);
+                if (activeFieldAdd == 2) DrawRectangleLinesEx(removeRect, 2, colors.accent);
 
-                // Input handling (preserve behavior)
-                int cp = GetCharPressed(); while (cp>0) { if (cp>=32 && cp<=125) { if (activeFieldAdd==0 && nameInput.size()<120) nameInput.push_back((char)cp); else if (activeFieldAdd==1 && priceInput.size()<32) priceInput.push_back((char)cp); else if (activeFieldAdd==3 && removeInput.size()<120) removeInput.push_back((char)cp); } cp=GetCharPressed(); }
-                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd+1)%4;
-                if (IsKeyPressed(KEY_BACKSPACE)) { if (activeFieldAdd==0 && !nameInput.empty()) nameInput.pop_back(); else if (activeFieldAdd==1 && !priceInput.empty()) priceInput.pop_back(); else if (activeFieldAdd==3 && !removeInput.empty()) removeInput.pop_back(); }
+                // Click-to-focus
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    if (CheckCollisionPointRec(mouse, nameRect)) activeFieldAdd = 0;
+                    else if (CheckCollisionPointRec(mouse, priceRect)) activeFieldAdd = 1;
+                    else if (CheckCollisionPointRec(mouse, removeRect)) activeFieldAdd = 2;
+                }
+
+                // Keyboard input for active field
+                int cp = GetCharPressed();
+                while (cp > 0) {
+                    if (cp >= 32 && cp <= 125) {
+                        if (activeFieldAdd == 0 && nameInput.size() < 200) nameInput.push_back((char)cp);
+                        else if (activeFieldAdd == 1 && priceInput.size() < 64) priceInput.push_back((char)cp);
+                        else if (activeFieldAdd == 2 && removeInput.size() < 200) removeInput.push_back((char)cp);
+                    }
+                    cp = GetCharPressed();
+                }
+                if (IsKeyPressed(KEY_BACKSPACE)) {
+                    if (activeFieldAdd == 0 && !nameInput.empty()) nameInput.pop_back();
+                    else if (activeFieldAdd == 1 && !priceInput.empty()) priceInput.pop_back();
+                    else if (activeFieldAdd == 2 && !removeInput.empty()) removeInput.pop_back();
+                }
+                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 3;
 
                 // Action buttons centered
                 float actionY = removeRect.y + inputH + gapV;
                 float actionW = RW(0.22f), actionH = RH(0.08f), actionGap = RW(0.04f);
                 float totalActionW = actionW * 3 + actionGap * 2;
-                float actionStartX = centerX - totalActionW/2.0f;
+                float actionStartX = centerX - totalActionW / 2.0f;
                 Rectangle btnSave = { actionStartX, actionY, actionW, actionH };
                 Rectangle btnRemove = { actionStartX + actionW + actionGap, actionY, actionW, actionH };
                 Rectangle btnCancel = { actionStartX + 2*(actionW + actionGap), actionY, actionW, actionH };
 
                 if (DrawButton(btnSave, "Save", colors.primary, colors, 20)) {
-                    double pr=0.0; bool ok=false;
-                    try { size_t start=0; while (start<priceInput.size() && !((priceInput[start]>='0'&&priceInput[start]<='9')||priceInput[start]=='.'||priceInput[start]=='-')) start++; std::string trimmed = priceInput.substr(start); if (!trimmed.empty()) { pr = std::stod(trimmed); ok = true; } } catch(...) { ok=false; }
-                    if (!ok) msg="Invalid price"; else if (nameInput.empty()) msg="Name required"; else {
+                    double pr = 0.0; bool ok = false;
+                    try {
+                        size_t start = 0; while (start < priceInput.size() && !((priceInput[start] >= '0' && priceInput[start] <= '9') || priceInput[start] == '.' || priceInput[start] == '-')) start++;
+                        std::string trimmed = priceInput.substr(start);
+                        if (!trimmed.empty()) { pr = std::stod(trimmed); ok = true; }
+                    } catch(...) { ok = false; }
+                    if (!ok) msg = "Invalid price";
+                    else if (nameInput.empty()) msg = "Name required";
+                    else {
                         std::ofstream ofs("data/products.txt", std::ios::app);
-                        if (ofs) { ofs << nameInput << ";" << pr; if (!sizeInput.empty()) ofs << ";" << sizeInput; ofs << "\n"; ofs.close(); msg="Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); productsLoaded=false; needsResort=true; } else msg="Failed to open file";
+                        if (ofs) {
+                            ofs << nameInput << ";" << pr;
+                            if (!sizeInput.empty()) ofs << ";" << sizeInput;
+                            ofs << "\n";
+                            ofs.close();
+                            msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); productsLoaded = false; needsResort = true;
+                        } else msg = "Failed to open file";
                     }
                 }
+
                 if (DrawButton(btnRemove, "Remove", colors.buttonBg, colors, 20)) {
-                    if (removeInput.empty()) msg="Enter a product name to remove";
+                    if (removeInput.empty()) msg = "Enter a product name to remove";
                     else {
-                        std::ifstream ifs("data/products.txt"); if (!ifs) msg="Failed to open products file"; else {
-                            std::vector<std::string> lines; std::string line; int removed=0;
+                        std::ifstream ifs("data/products.txt");
+                        if (!ifs) msg = "Failed to open products file";
+                        else {
+                            std::vector<std::string> lines; std::string line; int removed = 0;
                             auto toLower = [](const std::string &s){ std::string out=s; std::transform(out.begin(),out.end(),out.begin(),::tolower); return out; };
                             std::string target = toLower(removeInput);
-                            while (std::getline(ifs,line)) { if (line.empty()) continue; std::string nameOnly=line; size_t pos=line.find(';'); if (pos!=std::string::npos) nameOnly=line.substr(0,pos); if (toLower(nameOnly)==target) { removed++; continue; } lines.push_back(line); }
+                            while (std::getline(ifs, line)) {
+                                if (line.empty()) continue;
+                                std::string nameOnly = line; size_t pos = line.find(';'); if (pos != std::string::npos) nameOnly = line.substr(0, pos);
+                                if (toLower(nameOnly) == target) { removed++; continue; }
+                                lines.push_back(line);
+                            }
                             ifs.close();
                             std::ofstream ofs("data/products.txt", std::ios::trunc);
-                            if (!ofs) msg="Failed to write products file"; else { for (auto &l:lines) ofs<<l<<"\n"; ofs.close(); if (removed>0) { msg = "Removed " + std::to_string(removed) + " product(s)"; removeInput.clear(); productsLoaded=false; needsResort=true; } else msg="No product matched that name"; }
+                            if (!ofs) msg = "Failed to write products file";
+                            else {
+                                for (auto &l : lines) ofs << l << "\n";
+                                ofs.close();
+                                if (removed > 0) { msg = "Removed " + std::to_string(removed) + " product(s)"; removeInput.clear(); productsLoaded = false; needsResort = true; }
+                                else msg = "No product matched that name";
+                            }
                         }
                     }
                 }
+
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) state = STATE_MENU;
-                if (!msg.empty()) DrawTextScaled(msg.c_str(), centerX - MeasureTextScaled(msg.c_str(), 18)/2, RY(0.58f), 18, colors.accent);
+                if (!msg.empty()) DrawTextScaled(msg.c_str(), centerX - MeasureTextScaled(msg.c_str(), 18)/2, RY(0.86f), 18, colors.accent);
             }
-         }
+        }
          else if (state == STATE_OPTIONS) {
               // Back button
              Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
