@@ -600,13 +600,20 @@ int main() {
             DrawTextScaled("Pepka", centerX - MeasureTextScaled("Pepka", 60)/2, RY(0.18f), 60, colors.primary);
 
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)RY(0.45f), (float)RW(0.25f), (float)RH(0.1f) };
-            Rectangle btnAdd =  { (float)(centerX - RW(0.125f)), (float)RY(0.62f), (float)RW(0.25f), (float)RH(0.1f) };
-             if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_VIEW_PRODUCTS;
-             if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
+            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_VIEW_PRODUCTS;
 
-             Rectangle selector = { btnView.x, btnView.y + menuIndex * (btnAdd.y - btnView.y), btnView.width, btnView.height };
-             DrawRectangleLinesEx(selector, 3, DARK_ACCENT);
- 
+            // Only show Add Product button if admin
+            if (isAdmin) {
+                Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)RY(0.62f), (float)RW(0.25f), (float)RH(0.1f) };
+                if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
+                
+                // Move selector highlight based on menu index
+                Rectangle selector = { btnView.x, btnView.y + menuIndex * (btnAdd.y - btnView.y), btnView.width, btnView.height };
+                DrawRectangleLinesEx(selector, 3, DARK_ACCENT);
+            } else {
+                // Just highlight the view button for non-admin users
+                DrawRectangleLinesEx(btnView, 3, DARK_ACCENT);
+            }
          }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load & sort once
