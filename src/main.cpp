@@ -395,19 +395,26 @@ int main() {
             DrawTextScaled("Login", centerX - MeasureTextScaled("Login", 32)/2, RY(0.12f), 32, colors.primary);
 
             // Username / Password layout (same positions used for input handling)
+            // Define layout variables
             int labelX = RX(0.28f);
             int inputX = RX(0.4625f);
             int inputW = RW(0.25f);
             int rowY = RY(0.33f);
-            Rectangle usernameRect = { (float)inputX, (float)(rowY - 5), (float)inputW, (float)RH(0.05f) };
-            Rectangle passwordRect = { (float)inputX, (float)(rowY + RH(0.083f) - 5), (float)inputW, (float)RH(0.05f) };
-
+            int passwordRowY = rowY + RH(0.083f);
+            
+            // Create rectangles for input fields (compute RH/RW into floats to avoid narrowing warnings)
+            float inputH = (float)RH(0.05f);
+            float usernameRectX = (float)inputX;
+            float usernameRectY = (float)(rowY - 5);
+            float inputWf = (float)inputW;
+            Rectangle usernameRect = { usernameRectX, usernameRectY, inputWf, inputH };
+            Rectangle passwordRect = { (float)inputX, (float)(passwordRowY - 5), inputWf, inputH };
             DrawTextScaled("Username:", labelX, rowY, 20, colors.text);
             DrawRectangleRec(usernameRect, colors.inputBg);
             DrawTextScaled(username, (int)usernameRect.x + 6, (int)usernameRect.y + 6, 20, colors.text);
             if (inputFocus == 0) DrawRectangleLinesEx(usernameRect, 2, colors.accent);
 
-            DrawTextScaled("Password:", labelX, rowY + RH(0.083f), 20, colors.text);
+            DrawTextScaled("Password:", labelX, passwordRowY, 20, colors.text);
             DrawRectangleRec(passwordRect, colors.inputBg);
             std::string passDisplay = showPassword ? password : std::string(strlen(password), '*');
             DrawTextScaled(passDisplay.c_str(), (int)passwordRect.x + 6, (int)passwordRect.y + 6, 20, colors.text);
@@ -467,37 +474,10 @@ int main() {
             // Toggle password visibility with SPACE (user hint shown in Register screen too)
             if (IsKeyPressed(KEY_SPACE)) showPassword = !showPassword;
 
-            // Click-to-focus for username/password inputs
-            Vector2 mousePos = GetMousePosition();
-            Rectangle usernameRect = { (float)inputX, (float)(rowY - 5), (float)inputW, RH(0.05f) };
-            Rectangle passwordRect = { (float)inputX, (float)(pRowY - 5), (float)inputW, RH(0.05f) };
-            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-                if (CheckCollisionPointRec(mousePos, usernameRect)) {
-                    inputFocus = 0;
-                } else if (CheckCollisionPointRec(mousePos, passwordRect)) {
-                    inputFocus = 1;
-                }
-            }
-
-            // Text input handling for login fields
-            int c = GetCharPressed();
-            while (c > 0) {
-                if (c >= 32 && c <= 125) {
-                    if (inputFocus == 0 && strlen(username) < (int)sizeof(username)-1) {
-                        int len = strlen(username); username[len] = (char)c; username[len+1] = '\0';
-                    } else if (inputFocus == 1 && strlen(password) < (int)sizeof(password)-1) {
-                        int len = strlen(password); password[len] = (char)c; password[len+1] = '\0';
-                    }
-                }
-                c = GetCharPressed();
-            }
-            if (IsKeyPressed(KEY_BACKSPACE)) {
-                if (inputFocus == 0 && strlen(username) > 0) username[strlen(username)-1] = '\0';
-                else if (inputFocus == 1 && strlen(password) > 0) password[strlen(password)-1] = '\0';
-            }
-
             // Register button centered under inputs
-            Rectangle registerBtn = { (float)(centerX - RW(0.09375f)), (float)RY(0.55f), (float)RW(0.1875f), (float)RH(0.05f) };
+            float registerBtnW = (float)RW(0.1875f);
+            float registerBtnH = (float)RH(0.05f);
+            Rectangle registerBtn = { (float)(centerX) - registerBtnW/2.0f, (float)RY(0.55f), registerBtnW, registerBtnH };
             if (DrawButton(registerBtn, "Register New User", colors.secondary, colors, 16)) {
                 state = STATE_REGISTER;
                 strcpy(regUsername, "");
@@ -862,46 +842,40 @@ int main() {
              DrawTextScaled("Press ESC or click Back to return to menu", centerX - MeasureTextScaled("Press ESC or click Back to return to menu", 16)/2, RY(0.17f), 16, colors.accent);
              
 
-             // Theme selection section
-             DrawText("Theme:", 200, 200, 24, colors.text);
-             
-             Rectangle darkBtn = { 200, 240, 150, 40 };
-             Rectangle lightBtn = { 380, 240, 150, 40 };
-             
              // Theme selection section (responsive layout)
              float sectionTop = RY(0.22f);
              DrawText("Theme:", centerX - MeasureText("Theme:", 24)/2, sectionTop, 24, colors.text);
 
-             float btnW = RW(0.20f);
-             float btnH = RH(0.08f);
-             float btnGap = RW(0.04f);
+             float themeBtnW = RW(0.20f);
+             float themeBtnH = RH(0.08f);
+             float themeBtnGap = RW(0.04f);
              float themeY = sectionTop + RH(0.06f);
-             Rectangle darkBtn = { centerX - btnW - btnGap/2.0f, themeY, btnW, btnH };
-             Rectangle lightBtn = { centerX + btnGap/2.0f, themeY, btnW, btnH };
+             Rectangle themeButtonDark = { centerX - themeBtnW - themeBtnGap/2.0f, themeY, themeBtnW, themeBtnH };
+             Rectangle themeButtonLight = { centerX + themeBtnGap/2.0f, themeY, themeBtnW, themeBtnH };
 
              Color darkBtnColor = (currentTheme == THEME_DARK) ? colors.primary : colors.buttonBg;
              Color lightBtnColor = (currentTheme == THEME_LIGHT) ? colors.primary : colors.buttonBg;
 
-             if (DrawButton(darkBtn, "Dark Mode", darkBtnColor, colors, 20)) {
+             if (DrawButton(themeButtonDark, "Dark Mode", darkBtnColor, colors, 20)) {
                  currentTheme = THEME_DARK;
                  colors = GetColorScheme(currentTheme);
              }
-             if (DrawButton(lightBtn, "Light Mode", lightBtnColor, colors, 20)) {
+             if (DrawButton(themeButtonLight, "Light Mode", lightBtnColor, colors, 20)) {
                  currentTheme = THEME_LIGHT;
                  colors = GetColorScheme(currentTheme);
              }
 
             // Window mode selection: Windowed, Windowed-Fullscreen, Fullscreen (spaced horizontally)
-            float winSectionY = themeY + btnH + RH(0.06f);
+            float winSectionY = themeY + themeBtnH + RH(0.06f);
             DrawText("Window Mode:", centerX - MeasureText("Window Mode:", 24)/2, winSectionY, 24, colors.text);
             float winBtnsY = winSectionY + RH(0.06f);
             float winBtnW = RW(0.18f);
             float winBtnH = RH(0.08f);
-            float totalWinW = winBtnW * 3 + btnGap * 2;
+            float totalWinW = winBtnW * 3 + themeBtnGap * 2;
             float startX = centerX - totalWinW/2.0f;
             Rectangle winBtn = { startX, winBtnsY, winBtnW, winBtnH };
-            Rectangle winFsBtn = { startX + (winBtnW + btnGap), winBtnsY, winBtnW, winBtnH };
-            Rectangle fsBtn = { startX + 2*(winBtnW + btnGap), winBtnsY, winBtnW, winBtnH };
+            Rectangle winFsBtn = { startX + (winBtnW + themeBtnGap), winBtnsY, winBtnW, winBtnH };
+            Rectangle fsBtn = { startX + 2*(winBtnW + themeBtnGap), winBtnsY, winBtnW, winBtnH };
 
              Color winColor = (currentWindowMode == WM_WINDOWED) ? colors.primary : colors.buttonBg;
              Color winFsColor = (currentWindowMode == WM_WINDOWED_FULLSCREEN) ? colors.primary : colors.buttonBg;
