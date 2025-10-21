@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -215,6 +215,7 @@ int main() {
     bool searchActive = false;
     int sortMode = 0; // 0=default, 1=price asc, 2=price desc, 3=size asc, 4=size desc
     bool needsResort = true;
+    int selectedCategory = 0; // 0=All,1=Criança,2=Homem,3=Mulher,4=Bebê
 
     auto LoadProducts = [&](const std::string &path) -> bool {
         products.clear();
@@ -286,9 +287,31 @@ int main() {
         filteredProducts.clear();
         std::string searchTerm = searchInput;
         std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::tolower);
+        // helper: case-insensitive contains
+        auto ciContains = [](const std::string &hay, const std::string &needle)->bool {
+            std::string h = hay; std::string n = needle;
+            std::transform(h.begin(), h.end(), h.begin(), ::tolower);
+            std::transform(n.begin(), n.end(), n.begin(), ::tolower);
+            return h.find(n) != std::string::npos;
+        };
         
-        // Filter by search term
+        // Filter by category then search term
         for (const auto& product : products) {
+            bool categoryMatch = true;
+            if (selectedCategory != 0) {
+                // check product.sex and fallback to name/description
+                if (selectedCategory == 2) { // Homem
+                    categoryMatch = ciContains(product.sex, "m") || ciContains(product.sex, "MAN") || ciContains(product.name, "men") || ciContains(product.description, "men");
+                } else if (selectedCategory == 3) { // Mulher
+                    categoryMatch = ciContains(product.sex, "f") || ciContains(product.sex, "WOMEN") || ciContains(product.name, "women") || ciContains(product.description, "women");
+                } else if (selectedCategory == 4) { // Bebê
+                    categoryMatch = ciContains(product.name, "bebe") || ciContains(product.name, "baby") || ciContains(product.description, "baby") || ciContains(product.description, "bebe");
+                } else if (selectedCategory == 1) { // Criança
+                    categoryMatch = ciContains(product.name, "kid") || ciContains(product.name, "KID") || ciContains(product.description, "kid") || ciContains(product.description, "crian");
+                }
+            }
+            if (!categoryMatch) continue;
+
             if (searchTerm.empty()) {
                 filteredProducts.push_back(product);
             } else {
@@ -600,7 +623,7 @@ int main() {
             DrawTextScaled("Pepka", centerX - MeasureTextScaled("Pepka", 60)/2, RY(0.18f), 60, colors.primary);
 
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)RY(0.45f), (float)RW(0.25f), (float)RH(0.1f) };
-            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_VIEW_PRODUCTS;
+             if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_CATALOG;
 
             // Only show Add Product button if admin
             if (isAdmin) {
@@ -615,6 +638,24 @@ int main() {
                 DrawRectangleLinesEx(btnView, 3, DARK_ACCENT);
             }
          }
+        else if (state == STATE_CATALOG) {
+            // Simple category selector before viewing products
+            DrawTextScaled("Choose a category", centerX - MeasureTextScaled("Choose a category", 28)/2, RY(0.12f), 28, colors.primary);
+            float btnW = RW(0.28f); float btnH = RH(0.10f); float gap = RW(0.03f);
+            float startX = centerX - (btnW*2 + gap)/2.0f;
+            float y = RY(0.28f);
+            Rectangle catKids = { startX, y, btnW, btnH };
+            Rectangle catMen = { startX + (btnW + gap), y, btnW, btnH };
+            Rectangle catWomen = { startX, y + btnH + RH(0.04f), btnW, btnH };
+            Rectangle catBaby = { startX + (btnW + gap), y + btnH + RH(0.04f), btnW, btnH };
+            if (DrawButton(catKids, "Kid", colors.buttonBg, colors, 20)) { selectedCategory = 1; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catMen, "Man", colors.buttonBg, colors, 20)) { selectedCategory = 2; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catWomen, "Women", colors.buttonBg, colors, 20)) { selectedCategory = 3; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catBaby, "Baby", colors.buttonBg, colors, 20)) { selectedCategory = 4; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+
+            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+        }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load & sort once
             if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); needsResort = true; }
@@ -765,6 +806,12 @@ int main() {
 
                 Rectangle nameRect = { inputX, topY, fullW, inputH };
                 Rectangle priceRect = { inputX, nameRect.y + inputH + gapV, fullW * 0.4f, inputH };
+                // Category buttons will sit to the right of the price input
+                float catX = priceRect.x + priceRect.width + RW(0.02f);
+                float catBtnW = RW(0.06f);
+                float catBtnH = inputH * 0.9f;
+                float catGap = RW(0.015f);
+                // reserve remaining width for category buttons area (not used as a rect here)
                 Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
                 Rectangle removeRect = { inputX, sizeAreaRect.y + inputH + gapV, fullW, inputH };
 
@@ -778,6 +825,16 @@ int main() {
                 DrawRectangleRec(priceRect, colors.inputBg);
                 DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
+
+                // Category selection (M/W/K/B) placed to the right of Price
+                DrawTextScaled("Category:", (int)(catX), (int)priceRect.y + 6, 18, colors.text);
+                static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
+                const std::vector<std::string> catLabels = {"M","W","K","B"};
+                for (size_t ci = 0; ci < catLabels.size(); ++ci) {
+                    Rectangle cb = { catX + ci * (catBtnW + catGap), priceRect.y + (priceRect.height - catBtnH)/2.0f, catBtnW, catBtnH };
+                    if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) selectedCategoryAdd = (int)ci + 1;
+                    if (selectedCategoryAdd == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
+                }
 
                 // Size selection — buttons centered inside sizeAreaRect
                 DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
@@ -846,9 +903,19 @@ int main() {
                         if (ofs) {
                             ofs << nameInput << ";" << pr;
                             if (!sizeInput.empty()) ofs << ";" << sizeInput;
+                            // write category token slot (keep parser compatible): ;fabric;sex;description
+                            // We'll write an empty fabric token then sex as category code
+                            std::string catCode = "";
+                            if (selectedCategoryAdd == 1) catCode = "M";
+                            else if (selectedCategoryAdd == 2) catCode = "W";
+                            else if (selectedCategoryAdd == 3) catCode = "K";
+                            else if (selectedCategoryAdd == 4) catCode = "B";
+                            // ensure we include two separators so the product loader can parse fabric/sex
+                            ofs << ";"; // separator before fabric (we leave fabric empty)
+                            ofs << ";" << catCode; // sex field used for category
                             ofs << "\n";
                             ofs.close();
-                            msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); productsLoaded = false; needsResort = true;
+                            msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); selectedCategoryAdd = 0; productsLoaded = false; needsResort = true;
                         } else msg = "Failed to open file";
                     }
                 }
