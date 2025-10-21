@@ -113,7 +113,7 @@ int main() {
     const int screenWidth = 800;
     const int screenHeight = 600;
 
-    InitWindow(screenWidth, screenHeight, "Clothing Store App");
+    InitWindow(screenWidth, screenHeight, "Pepka");
     SetTargetFPS(60);
 
     // Window mode handling: support Windowed, Windowed-Fullscreen (bordered window resized to monitor),
