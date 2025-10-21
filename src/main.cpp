@@ -437,11 +437,18 @@ int main() {
             DrawTextScaled(username, (int)usernameRect.x + 6, (int)usernameRect.y + 6, 20, colors.text);
             if (inputFocus == 0) DrawRectangleLinesEx(usernameRect, 2, colors.accent);
 
+            // Password field with show/hide button
             DrawTextScaled("Password:", labelX, passwordRowY, 20, colors.text);
             DrawRectangleRec(passwordRect, colors.inputBg);
             std::string passDisplay = showPassword ? password : std::string(strlen(password), '*');
             DrawTextScaled(passDisplay.c_str(), (int)passwordRect.x + 6, (int)passwordRect.y + 6, 20, colors.text);
             if (inputFocus == 1) DrawRectangleLinesEx(passwordRect, 2, colors.accent);
+
+            // Add show/hide password button
+            Rectangle showPassBtn = { passwordRect.x + passwordRect.width + 10, passwordRect.y, (float)RH(0.05f), passwordRect.height };
+            if (DrawButton(showPassBtn, showPassword ? "Hide" : "Show", colors.buttonBg, colors, 14)) {
+                showPassword = !showPassword;
+            }
 
             // Handle mouse focus on inputs
             Vector2 mousePos = GetMousePosition();
@@ -451,6 +458,7 @@ int main() {
                 else inputFocus = -1;
             }
 
+            // Remove the space key toggle for password visibility
             // Tab to switch fields (must click first or press Tab to focus)
             if (IsKeyPressed(KEY_TAB)) {
                 if (inputFocus < 0) inputFocus = 0;
@@ -494,9 +502,6 @@ int main() {
                 }
             }
 
-            // Toggle password visibility with SPACE (user hint shown in Register screen too)
-            if (IsKeyPressed(KEY_SPACE)) showPassword = !showPassword;
-
             // Register button centered under inputs
             float registerBtnW = (float)RW(0.1875f);
             float registerBtnH = (float)RH(0.05f);
@@ -523,37 +528,87 @@ int main() {
             int rInputX = RX(0.4625f);
             int rInputW = RW(0.25f);
             int rY = RY(0.28f);
-            DrawText("Username:", rLabelX, rY, 20, colors.text);
-            DrawRectangle(rInputX, rY - 5, rInputW, RH(0.05f), colors.inputBg);
-            DrawTextScaled(regUsername, rInputX + 5, rY, 20, colors.text);
-            if (regInputFocus == 0) DrawRectangleLines(rInputX, rY - 5, rInputW, RH(0.05f), colors.accent);
+            float inputH = (float)RH(0.05f);
 
-            DrawText("Password:", rLabelX, rY + RH(0.083f), 20, colors.text);
-            DrawRectangle(rInputX, rY + RH(0.078f), rInputW, RH(0.05f), colors.inputBg);
-            std::string regPassDisplay = regShowPassword ? regPassword : std::string(strlen(regPassword), '*');
-            DrawTextScaled(regPassDisplay.c_str(), rInputX + 5, rY + RH(0.083f), 20, colors.text);
-            if (regInputFocus == 1) DrawRectangleLines(rInputX, rY + RH(0.078f), rInputW, RH(0.05f), colors.accent);
+            // Username field
+            Rectangle usernameRect = { (float)rInputX, (float)(rY - 5), (float)rInputW, inputH };
+            DrawTextScaled("Username:", rLabelX, rY, 20, colors.text);
+            DrawRectangleRec(usernameRect, colors.inputBg);
+            DrawTextScaled(regUsername, (int)usernameRect.x + 6, (int)usernameRect.y + 6, 20, colors.text);
+            if (regInputFocus == 0) DrawRectangleLinesEx(usernameRect, 2, colors.accent);
 
-            DrawText("Confirm Password:", rLabelX - RW(0.05f), rY + RH(0.166f), 20, colors.text);
-            DrawRectangle(rInputX, rY + RH(0.161f), rInputW, RH(0.05f), colors.inputBg);
-            std::string regConfirmDisplay = regShowPassword ? regConfirmPassword : std::string(strlen(regConfirmPassword), '*');
-            DrawTextScaled(regConfirmDisplay.c_str(), rInputX + 5, rY + RH(0.166f), 20, colors.text);
-            if (regInputFocus == 2) DrawRectangleLines(rInputX, rY + RH(0.161f), rInputW, RH(0.05f), colors.accent);
+            // Password field
+            Rectangle passwordRect = { (float)rInputX, (float)(rY + RH(0.078f)), (float)rInputW, inputH };
+            DrawTextScaled("Password:", rLabelX, rY + RH(0.083f), 20, colors.text);
+            DrawRectangleRec(passwordRect, colors.inputBg);
+            std::string passDisplay = regShowPassword ? regPassword : std::string(strlen(regPassword), '*');
+            DrawTextScaled(passDisplay.c_str(), (int)passwordRect.x + 6, (int)passwordRect.y + 6, 20, colors.text);
+            if (regInputFocus == 1) DrawRectangleLinesEx(passwordRect, 2, colors.accent);
 
-            DrawTextScaled("Press TAB to switch fields, ENTER to register", RX(0.33f), RY(0.55f), 18, colors.accent);
-            DrawTextScaled("Press SPACE to show/hide passwords", RX(0.36f), RY(0.58f), 18, colors.accent);
-            DrawTextScaled("Minimum 3 characters for username and password", RX(0.33f), RY(0.61f), 16, colors.accent);
-            
-            // Back to login button
-            Rectangle backToLoginBtn = { 200, 420, 120, 30 };
-            if (DrawButton(backToLoginBtn, "← Back to Login", colors.buttonBg, colors, 16)) {
+            // Confirm Password field
+            Rectangle confirmRect = { (float)rInputX, (float)(rY + RH(0.161f)), (float)rInputW, inputH };
+            DrawTextScaled("Confirm Password:", rLabelX - RW(0.05f), rY + RH(0.166f), 20, colors.text);
+            DrawRectangleRec(confirmRect, colors.inputBg);
+            std::string confirmDisplay = regShowPassword ? regConfirmPassword : std::string(strlen(regConfirmPassword), '*');
+            DrawTextScaled(confirmDisplay.c_str(), (int)confirmRect.x + 6, (int)confirmRect.y + 6, 20, colors.text);
+            if (regInputFocus == 2) DrawRectangleLinesEx(confirmRect, 2, colors.accent);
+
+            // Show/Hide password button
+            Rectangle showPassBtn = { confirmRect.x + confirmRect.width + 10, passwordRect.y, (float)RH(0.05f), inputH };
+            if (DrawButton(showPassBtn, regShowPassword ? "Hide" : "Show", colors.buttonBg, colors, 14)) {
+                regShowPassword = !regShowPassword;
+            }
+
+            // Handle mouse focus on inputs
+            Vector2 mousePos = GetMousePosition();
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                if (CheckCollisionPointRec(mousePos, usernameRect)) regInputFocus = 0;
+                else if (CheckCollisionPointRec(mousePos, passwordRect)) regInputFocus = 1;
+                else if (CheckCollisionPointRec(mousePos, confirmRect)) regInputFocus = 2;
+                else regInputFocus = -1;
+            }
+
+            // Tab to switch fields
+            if (IsKeyPressed(KEY_TAB)) {
+                regInputFocus = (regInputFocus + 1) % 3;
+            }
+
+            // Input handling for active field
+            int key = GetCharPressed();
+            while (key > 0) {
+                if (key >= 32 && key <= 125) {
+                    if (regInputFocus == 0 && strlen(regUsername) < sizeof(regUsername) - 1) {
+                        int len = strlen(regUsername);
+                        regUsername[len] = (char)key;
+                        regUsername[len + 1] = '\0';
+                    } else if (regInputFocus == 1 && strlen(regPassword) < sizeof(regPassword) - 1) {
+                        int len = strlen(regPassword);
+                        regPassword[len] = (char)key;
+                        regPassword[len + 1] = '\0';
+                    } else if (regInputFocus == 2 && strlen(regConfirmPassword) < sizeof(regConfirmPassword) - 1) {
+                        int len = strlen(regConfirmPassword);
+                        regConfirmPassword[len] = (char)key;
+                        regConfirmPassword[len + 1] = '\0';
+                    }
+                }
+                key = GetCharPressed();
+            }
+
+            if (IsKeyPressed(KEY_BACKSPACE)) {
+                if (regInputFocus == 0 && strlen(regUsername) > 0) regUsername[strlen(regUsername)-1] = '\0';
+                else if (regInputFocus == 1 && strlen(regPassword) > 0) regPassword[strlen(regPassword)-1] = '\0';
+                else if (regInputFocus == 2 && strlen(regConfirmPassword) > 0) regConfirmPassword[strlen(regConfirmPassword)-1] = '\0';
+            }
+
+            // Action buttons
+            Rectangle backBtn = { (float)RX(0.30f), (float)RY(0.55f), (float)RW(0.15f), (float)RH(0.06f) };
+            Rectangle registerBtn = { (float)RX(0.55f), (float)RY(0.55f), (float)RW(0.15f), (float)RH(0.06f) };
+
+            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
                 state = STATE_LOGIN;
             }
-            
-            // Register button
-            Rectangle regBtn = { 350, 420, 100, 30 };
-            if (DrawButton(regBtn, "Register", colors.primary, colors, 16)) {
-                // Trigger the same logic as ENTER key
+            if (DrawButton(registerBtn, "Register", colors.primary, colors, 16)) {
+                // Registration validation logic
                 std::string regUser = std::string(regUsername);
                 std::string regPass = std::string(regPassword);
                 std::string regConfirm = std::string(regConfirmPassword);
@@ -574,7 +629,6 @@ int main() {
                     if (SaveUser(regUser, regPass)) {
                         regFailed = false;
                         regMessage = "Registration successful! You can now login.";
-                        // Clear registration form
                         strcpy(regUsername, "");
                         strcpy(regPassword, "");
                         strcpy(regConfirmPassword, "");
@@ -586,10 +640,10 @@ int main() {
                 }
             }
 
-            // Show success/error messages
+            // Show message (if any)
             if (!regMessage.empty()) {
                 Color msgColor = regFailed ? RED : GREEN;
-                DrawTextScaled(regMessage.c_str(), centerX - MeasureTextScaled(regMessage.c_str(), 18)/2, RY(0.78f), 18, msgColor);
+                DrawTextScaled(regMessage.c_str(), centerX - MeasureTextScaled(regMessage.c_str(), 18)/2, RY(0.70f), 18, msgColor);
             }
         }
         else if (state == STATE_MENU) {
