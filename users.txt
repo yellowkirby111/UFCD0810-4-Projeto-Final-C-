@@ -1,3 +1,4 @@
 admin:1234
 user:password
 alex:sigmaboy
+alex2:sigma
