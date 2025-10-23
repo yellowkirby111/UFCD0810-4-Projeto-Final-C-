@@ -1,9 +1,11 @@
-T-shirt;9.99;M
-Jeans;39.50;L
-Hat;7.25;OneSize
-Socks;3.10;S
-Jacket;59.99;XL
-Macacao;34.37;M
-boxers_batman;99.44;M
-meias do spongebob;9.99;XXS
-botas vermelhas;67.32;M
+T-shirt;9.99;M;;K;
+Jeans;39.50;L;;W;
+Hat;7.25;OneSize;;M;
+Socks;3.10;S;;K;
+Jacket;59.99;XL;;W;
+Macacao;34.37;M;;B;
+boxers_batman;99.44;M;;M;
+meias do spongebob;9.99;XXS;;K;
+botas vermelhas;67.32;M;;W;
+adbnuj;19;S;;M;
+azul;46.23;S;o meu bilau azul;B;
