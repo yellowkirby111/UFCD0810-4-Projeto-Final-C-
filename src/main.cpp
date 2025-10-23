@@ -830,8 +830,7 @@ int main() {
                 DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
 
-                // Category selection (M/W/K/B) placed to the right of Price
-                DrawTextScaled("Category:", (int)(catX), (int)priceRect.y + 6, 18, colors.text);
+                // Category selection (M/W/K/B) placed to the right of Price (label removed)
                 static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
                 const std::vector<std::string> catLabels = {"M","W","K","B"};
                 for (size_t ci = 0; ci < catLabels.size(); ++ci) {
