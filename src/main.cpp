@@ -291,7 +291,7 @@ int main() {
         auto ciContains = [](const std::string &hay, const std::string &needle)->bool {
             std::string h = hay; std::string n = needle;
             std::transform(h.begin(), h.end(), h.begin(), ::tolower);
-            std::transform(n.begin(), n.end(), n.begin(), ::tolower);
+            std::transform(n.begin(), n.end(), n.begin(), ::lower);
             return h.find(n) != std::string::npos;
         };
         
@@ -383,6 +383,9 @@ int main() {
         users.push_back({username, password});
         return true;
     };
+
+    // Add this near the top of main(), after InitWindow:
+    Texture2D logo = LoadTexture("assets/logo.png");
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
         // Handle ESC key navigation
@@ -673,8 +676,12 @@ int main() {
             if (isAdmin) userInfo += " (Admin)";
             DrawTextScaled(userInfo.c_str(), (int)(optionsBtn.x - 10 - MeasureTextScaled(userInfo.c_str(), 16)), RY(margin) + 6, 16, colors.accent);
              
-            // Title and centered menu buttons
-            DrawTextScaled("Pepka", centerX - MeasureTextScaled("Pepka", 60)/2, RY(0.18f), 60, colors.primary);
+            // Title and logo side by side
+            int titleWidth = MeasureTextScaled("Pepka", 60);
+            int pepkaX = centerX - (titleWidth + 20 + logo.width)/2; // 20px gap between text and logo
+            DrawTextScaled("Pepka", pepkaX, RY(0.18f), 60, colors.primary);
+            // Draw logo to the right of the text
+            DrawTexture(logo, pepkaX + titleWidth + 20, RY(0.18f), WHITE);
 
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)RY(0.45f), (float)RW(0.25f), (float)RH(0.1f) };
              if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_CATALOG;
@@ -1070,6 +1077,7 @@ int main() {
          EndDrawing();
     }
 
+    UnloadTexture(logo);
     CloseWindow();
     std::cout << "Exiting application." << std::endl;
     return 0;
