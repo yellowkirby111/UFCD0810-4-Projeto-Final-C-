@@ -295,19 +295,23 @@ int main() {
             return h.find(n) != std::string::npos;
         };
         
+
         // Filter by category then search term
         for (const auto& product : products) {
             bool categoryMatch = true;
             if (selectedCategory != 0) {
-                // check product.sex and fallback to name/description
+                // prefer explicit single-letter codes saved in product.sex (M/W/K/B)
+                std::string sexLower = product.sex;
+                std::transform(sexLower.begin(), sexLower.end(), sexLower.begin(), ::tolower);
+
                 if (selectedCategory == 2) { // Homem
-                    categoryMatch = ciContains(product.sex, "m") || ciContains(product.sex, "MAN") || ciContains(product.name, "men") || ciContains(product.description, "men");
+                    categoryMatch = (sexLower == "m") || ciContains(product.name, "men") || ciContains(product.description, "men");
                 } else if (selectedCategory == 3) { // Mulher
-                    categoryMatch = ciContains(product.sex, "f") || ciContains(product.sex, "WOMEN") || ciContains(product.name, "women") || ciContains(product.description, "women");
+                    categoryMatch = (sexLower == "w") || ciContains(product.name, "women") || ciContains(product.description, "women") || ciContains(product.name, "mulher") || ciContains(product.description, "mulher");
                 } else if (selectedCategory == 4) { // Bebê
-                    categoryMatch = ciContains(product.name, "bebe") || ciContains(product.name, "baby") || ciContains(product.description, "baby") || ciContains(product.description, "bebe");
+                    categoryMatch = (sexLower == "b") || ciContains(product.name, "bebe") || ciContains(product.name, "baby") || ciContains(product.description, "baby") || ciContains(product.description, "bebe");
                 } else if (selectedCategory == 1) { // Criança
-                    categoryMatch = ciContains(product.name, "kid") || ciContains(product.name, "KID") || ciContains(product.description, "kid") || ciContains(product.description, "crian");
+                    categoryMatch = (sexLower == "k") || ciContains(product.name, "kid") || ciContains(product.name, "crian") || ciContains(product.description, "kid") || ciContains(product.description, "crian");
                 }
             }
             if (!categoryMatch) continue;
@@ -880,8 +884,7 @@ int main() {
                 DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
 
-                // Category selection (M/W/K/B) placed to the right of Price
-                DrawTextScaled("Category:", (int)(catX), (int)priceRect.y + 6, 18, colors.text);
+                // Category selection (M/W/K/B) placed to the right of Price (label removed)
                 static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
                 const std::vector<std::string> catLabels = {"M","W","K","B"};
                 for (size_t ci = 0; ci < catLabels.size(); ++ci) {
@@ -955,19 +958,18 @@ int main() {
                     else {
                         std::ofstream ofs("data/products.txt", std::ios::app);
                         if (ofs) {
-                            ofs << nameInput << ";" << pr;
-                            if (!sizeInput.empty()) ofs << ";" << sizeInput;
-                            // write category token slot (keep parser compatible): ;fabric;sex;description
-                            // We'll write an empty fabric token then sex as category code
-                            std::string catCode = "";
-                            if (selectedCategoryAdd == 1) catCode = "M";
-                            else if (selectedCategoryAdd == 2) catCode = "W";
-                            else if (selectedCategoryAdd == 3) catCode = "K";
-                            else if (selectedCategoryAdd == 4) catCode = "B";
-                            // ensure we include two separators so the product loader can parse fabric/sex
-                            ofs << ";"; // separator before fabric (we leave fabric empty)
-                            ofs << ";" << catCode; // sex field used for category
-                            ofs << "\n";
+                            // Always write 6 fields: name;price;size;fabric;sex;description
+                            std::string sizeToken = sizeInput.empty() ? std::string() : sizeInput;
+                            std::string fabricToken = std::string();
+                            std::string sexToken;
+                            if (selectedCategoryAdd == 1) sexToken = "M";
+                            else if (selectedCategoryAdd == 2) sexToken = "W";
+                            else if (selectedCategoryAdd == 3) sexToken = "K";
+                            else if (selectedCategoryAdd == 4) sexToken = "B";
+                            else sexToken = std::string();
+                            std::string descToken = std::string();
+
+                            ofs << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << descToken << "\n";
                             ofs.close();
                             msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); selectedCategoryAdd = 0; productsLoaded = false; needsResort = true;
                         } else msg = "Failed to open file";
