@@ -825,7 +825,7 @@ int main() {
             // responsive layout for list
             float margin = 0.025f;
             Rectangle backBtn = { (float)RX(margin), (float)RY(margin), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_CATALOG;
 
             // Use Calibri for headings
             DrawTextScaled("Product List", centerX - MeasureTextScaled("Product List", 40)/2, RY(0.05f), 40, DARKBLUE);
