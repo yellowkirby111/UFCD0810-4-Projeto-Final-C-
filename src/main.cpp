@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -429,6 +429,42 @@ int main() {
         return true;
     };
 
+    // Per-user cart persistence: file per user at data/cart_<username>.txt
+    auto CartFilename = [&](const std::string &user)->std::string {
+        std::string fn = "data/cart_" + user + ".txt";
+        return fn;
+    };
+
+    auto LoadCart = [&](const std::string &user) {
+        std::vector<std::pair<std::string,int>> cart;
+        if (user.empty()) return cart;
+        std::ifstream ifs(CartFilename(user));
+        if (!ifs) return cart;
+        std::string line;
+        while (std::getline(ifs, line)) {
+            if (line.empty()) continue;
+            size_t p = line.find(';');
+            std::string name = line.substr(0, p);
+            int qty = 1;
+            if (p != std::string::npos) {
+                try { qty = std::stoi(line.substr(p+1)); } catch(...) { qty = 1; }
+            }
+            cart.push_back({name, qty});
+        }
+        return cart;
+    };
+
+    auto SaveCart = [&](const std::string &user, const std::vector<std::pair<std::string,int>> &cart)->bool {
+        if (user.empty()) return false;
+        std::ofstream ofs(CartFilename(user), std::ios::trunc);
+        if (!ofs) return false;
+        for (const auto &it : cart) ofs << it.first << ";" << it.second << "\n";
+        return true;
+    };
+
+    // In-memory cart for currently logged user
+    std::vector<std::pair<std::string,int>> currentCart;
+
     // Add this near the top of main(), after InitWindow:
     Texture2D logo = LoadTexture("assets/logo.png");
 
@@ -521,6 +557,8 @@ int main() {
                     currentUser = su;
                     isAdmin = (currentUser == "admin");
                     loginFailed = false;
+                    // load user's cart
+                    currentCart = LoadCart(currentUser);
                     state = STATE_MENU;
                     // clear sensitive buffer if you want:
                     // memset(password, 0, sizeof(password));
@@ -736,16 +774,25 @@ int main() {
             DrawTextScaled("Pepka", pepkaX, RY(0.25f), 60, colors.primary);
             DrawTextureEx(logo, logoPos, 0.0f, logoScale, WHITE);
 
-            Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)RY(0.45f), (float)RW(0.25f), (float)RH(0.1f) };
-             if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_CATALOG;
+            // Menu buttons stack (aligned vertically with consistent spacing)
+            float menuBaseY = RY(0.52f);
+            float menuSpacing = RH(0.12f);
+            Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)menuBaseY, (float)RW(0.25f), (float)RH(0.1f) };
+            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_CATALOG;
 
-            // Only show Add Product button if admin
+            // Cart button (visible when logged in) placed under View
+            Rectangle btnCart = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing), (float)RW(0.25f), (float)RH(0.1f) };
+            if (!currentUser.empty()) {
+                if (DrawButton(btnCart, "Cart", colors.buttonBg, colors, 28)) state = STATE_CART;
+            }
+
+            // Only show Add Product button if admin (placed under Cart)
             if (isAdmin) {
-                Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)RY(0.62f), (float)RW(0.25f), (float)RH(0.1f) };
+                Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing*2.0f), (float)RW(0.25f), (float)RH(0.1f) };
                 if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 28)) state = STATE_ADD_PRODUCT;
-                
-                // Move selector highlight based on menu index
-                Rectangle selector = { btnView.x, btnView.y + menuIndex * (btnAdd.y - btnView.y), btnView.width, btnView.height };
+
+                // Move selector highlight based on menu index (uses uniform spacing)
+                Rectangle selector = { btnView.x, btnView.y + menuIndex * menuSpacing, btnView.width, btnView.height };
                 DrawRectangleLinesEx(selector, 3, DARK_ACCENT);
             } else {
                 // Just highlight the view button for non-admin users
@@ -892,6 +939,19 @@ int main() {
                     if (!lineBuf.empty()) DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
                     Rectangle closeBtn; closeBtn.x = (float)(modal.x + modal.width - (float)RW(0.12f)); closeBtn.y = (float)(modal.y + modal.height - (float)RH(0.08f)); closeBtn.width = (float)RW(0.12f); closeBtn.height = (float)RH(0.08f);
                     if (DrawButton(closeBtn, "Close", colors.buttonBg, colors, 16)) viewDescriptionIndex = -1;
+                    // Add to cart button (logged-in users)
+                    if (!currentUser.empty()) {
+                        Rectangle addCartBtn = { modal.x + 20.0f, modal.y + modal.height - (float)RH(0.08f), (float)RW(0.22f), (float)RH(0.08f) };
+                        if (DrawButton(addCartBtn, "Add to Cart", colors.primary, colors, 16)) {
+                            // add or increment
+                            bool found = false;
+                            for (auto &it : currentCart) {
+                                if (it.first == p.name) { it.second += 1; found = true; break; }
+                            }
+                            if (!found) currentCart.push_back({p.name, 1});
+                            SaveCart(currentUser, currentCart);
+                        }
+                    }
                 }
             }
         }
@@ -1108,6 +1168,112 @@ int main() {
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) state = STATE_MENU;
                 if (!msg.empty()) DrawTextScaled(msg.c_str(), centerX - MeasureTextScaled(msg.c_str(), 18)/2, RY(0.86f), 18, colors.accent);
             }
+        }
+        else if (state == STATE_CART) {
+            // Ensure products loaded for price lookup
+            if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); needsResort = true; }
+
+            // Back button
+            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+
+            if (currentUser.empty()) {
+                // draw empty state lower to avoid overlapping header
+                DrawTextScaled("Please login to view your cart.", centerX - MeasureTextScaled("Please login to view your cart.", 18)/2, RY(0.30f), 18, colors.accent);
+            } else {
+                // Layout columns (shifted slightly down so header stays visible)
+                float marginX = RX(0.06f);
+                // Card width is slightly smaller than full available width to leave room for the Remove button
+                float cardW = RW(0.78f);
+                float listX = marginX;
+                float listY = RY(0.20f); // moved down a bit
+                // internal column widths relative to card width
+                float colNameW = cardW * 0.55f;
+                float colQtyW = cardW * 0.15f;
+                float colPriceW = cardW * 0.15f;
+                float colSubW = cardW * 0.15f;
+                float rowH = RH(0.09f);
+                float gap = RH(0.015f);
+
+                // Header row background
+                Rectangle headerRect = { listX, listY - rowH*0.6f, RW(0.88f), rowH*0.7f };
+                DrawRectangleRec(headerRect, Fade(colors.inputBg, 0.95f));
+                DrawTextScaled("Item", (int)listX + 8, (int)(headerRect.y + 6), 18, colors.text);
+                DrawTextScaled("Qty", (int)(listX + colNameW + 6), (int)(headerRect.y + 6), 18, colors.text);
+                DrawTextScaled("Price", (int)(listX + colNameW + colQtyW + 6), (int)(headerRect.y + 6), 18, colors.text);
+                DrawTextScaled("Subtotal", (int)(listX + colNameW + colQtyW + colPriceW + 6), (int)(headerRect.y + 6), 18, colors.text);
+
+                double total = 0.0;
+                float y = listY;
+                if (currentCart.empty()) {
+                    DrawTextScaled("Your cart is empty.", centerX - MeasureTextScaled("Your cart is empty.", 20)/2, RY(0.45f), 20, colors.accent);
+                    DrawTextScaled("Browse products and click 'Add to Cart' to add items.", centerX - MeasureTextScaled("Browse products and click 'Add to Cart' to add items.", 16)/2, RY(0.50f), 16, colors.text);
+                } else {
+                    for (size_t i = 0; i < currentCart.size(); ++i) {
+                        const auto &it = currentCart[i];
+                        // card background (narrower than full width to leave room for Remove button)
+                        Rectangle card = { listX, y, cardW, rowH };
+                        DrawRectangleRec(card, Fade(colors.inputBg, 0.98f));
+                        DrawRectangleLinesEx(card, 2, colors.primary);
+
+                        // Name (wrap naive)
+                        DrawTextScaled(it.first.c_str(), (int)(card.x + 8), (int)(card.y + 8), 18, colors.text);
+
+                        // Price lookup
+                        double price = 0.0; bool hasPrice = false;
+                        for (const auto &prod : products) { if (prod.name == it.first) { price = prod.price; hasPrice = prod.hasPrice; break; } }
+                        std::ostringstream priceS; if (hasPrice) priceS << std::fixed << std::setprecision(2) << price; else priceS << "-";
+                        std::string priceStr = priceS.str();
+
+                        // Qty controls (inside card)
+                        Rectangle qtyRect = { card.x + colNameW, card.y + rowH*0.15f, colQtyW, rowH*0.7f };
+                        Rectangle minusBtn = { qtyRect.x, qtyRect.y, qtyRect.width*0.36f, qtyRect.height };
+                        Rectangle qtyLabel = { qtyRect.x + qtyRect.width*0.36f, qtyRect.y, qtyRect.width*0.28f, qtyRect.height };
+                        Rectangle plusBtn = { qtyRect.x + qtyRect.width*0.64f, qtyRect.y, qtyRect.width*0.36f, qtyRect.height };
+                        if (DrawButton(minusBtn, "-", colors.buttonBg, colors, 18)) {
+                            if (currentCart[i].second > 1) currentCart[i].second -= 1; else { currentCart.erase(currentCart.begin() + i); }
+                            SaveCart(currentUser, currentCart);
+                        }
+                        DrawTextScaled(std::to_string(it.second).c_str(), (int)(qtyLabel.x + (qtyLabel.width - MeasureTextScaled(std::to_string(it.second).c_str(),18))/2), (int)(qtyLabel.y + 6), 18, colors.text);
+                        if (DrawButton(plusBtn, "+", colors.buttonBg, colors, 18)) { currentCart[i].second += 1; SaveCart(currentUser, currentCart); }
+
+                        // Price
+                        DrawTextScaled(priceStr.c_str(), (int)(card.x + colNameW + colQtyW + 8), (int)(card.y + 8), 18, colors.text);
+
+                        // Subtotal
+                        double subtotal = hasPrice ? price * it.second : 0.0;
+                        if (hasPrice) {
+                            std::ostringstream ss; ss << std::fixed << std::setprecision(2) << subtotal;
+                            DrawTextScaled((std::string("$") + ss.str()).c_str(), (int)(card.x + colNameW + colQtyW + colPriceW + 8), (int)(card.y + 8), 18, colors.text);
+                            total += subtotal;
+                        } else {
+                            DrawTextScaled("-", (int)(card.x + colNameW + colQtyW + colPriceW + 8), (int)(card.y + 8), 18, colors.text);
+                        }
+
+                        // Remove small button on right (placed in the margin to avoid overlapping Subtotal)
+                        Rectangle remBtn = { card.x + card.width + RW(0.02f), card.y + rowH*0.18f, RW(0.12f), rowH*0.64f };
+                        if (DrawButton(remBtn, "Remove", (Color){220,80,80,255}, colors, 16)) { currentCart.erase(currentCart.begin() + i); SaveCart(currentUser, currentCart); }
+
+                        y += rowH + gap;
+                    }
+
+                    // Totals box (fixed bottom right)
+                    std::ostringstream tot; tot << "Total: $" << std::fixed << std::setprecision(2) << total;
+                    std::string totStr = tot.str();
+                    Rectangle totBox = { (float)(centerX + RW(0.10f)), (float)RY(0.70f), (float)RW(0.34f), (float)RH(0.18f) };
+                    DrawRectangleRec(totBox, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(totBox, 2, colors.primary);
+                    DrawTextScaled(totStr.c_str(), (int)(totBox.x + 12), (int)(totBox.y + 12), 20, colors.primary);
+
+                    // Checkout and Clear buttons
+                    Rectangle checkoutBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f) - 8, totBox.width - 24, RH(0.06f) };
+                    if (DrawButton(checkoutBtn, "Checkout", colors.primary, colors, 20)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+                    Rectangle clearBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f)*2 - 16, totBox.width - 24, RH(0.06f) };
+                    if (DrawButton(clearBtn, "Clear Cart", (Color){200,70,70,255}, colors, 16)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+                }
+            }
+
+            // Draw header last so it appears on top of cards
+            DrawTextScaled("My Cart", centerX - MeasureTextScaled("My Cart", 36)/2, RY(0.08f), 36, colors.primary);
         }
         else if (state == STATE_EDIT_PRODUCTS) {
             // Ensure products loaded
