@@ -1230,8 +1230,7 @@ int main() {
                             std::string sizeToken = editSize;
                             std::string sexToken;
                             if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
-                            // include description field
-                            static std::string editDescription = "";
+                            // include description field (use outer editDescription variable)
                             std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
                             lines[editProductIndex] = newline.str();
                             std::ofstream ofs("data/products.txt", std::ios::trunc);
