@@ -80,6 +80,26 @@ bool CheckLogin(const std::vector<std::pair<std::string, std::string>>& users,
     return false;
 }
 
+// Global font used by scaled helpers
+Font gFont = { 0 };
+
+// --- Scaled text helpers (use these anywhere instead of raw DrawText/MeasureText) ---
+static inline int ScaledFontSize(int baseFontSize) {
+    // Reference UI built for 600px height; scale linearly with current screen height
+    return std::max(8, (int)(baseFontSize * ((float)GetScreenHeight() / 600.0f)));
+}
+static inline void DrawTextScaled(const char *text, int x, int y, int baseFontSize, Color color) {
+    Vector2 pos = {(float)x, (float)y};
+    float fontSize = (float)ScaledFontSize(baseFontSize);
+    float spacing = fontSize * 0.1f; // 10% of font size for proper spacing
+    DrawTextEx(gFont, text, pos, fontSize, spacing, color);
+}
+static inline int MeasureTextScaled(const char *text, int baseFontSize) {
+    float fontSize = (float)ScaledFontSize(baseFontSize);
+    float spacing = fontSize * 0.1f; // Match spacing used in DrawTextScaled
+    return (int)MeasureTextEx(gFont, text, fontSize, spacing).x;
+}
+
 bool DrawButton(const Rectangle &r, const char *text, Color baseColor, const ColorScheme &colors, int fontSize = 20) {
     Vector2 mouse = GetMousePosition();
     bool hovered = CheckCollisionPointRec(mouse, r);
@@ -88,25 +108,13 @@ bool DrawButton(const Rectangle &r, const char *text, Color baseColor, const Col
     DrawRectangleRec(r, color);
     DrawRectangleLinesEx(r, 2, colors.primary);
 
-    // scale font relative to a 600px reference height
-    int scaledFont = std::max(8, (int)(fontSize * ((float)GetScreenHeight() / 600.0f)));
-    int textWidth = MeasureText(text, scaledFont);
-    DrawText(text, (int)(r.x + (r.width - textWidth) / 2), (int)(r.y + (r.height - scaledFont) / 2), scaledFont, colors.text);
+    // Use the global TTF font via the scaled helpers so the button text uses Calibri
+    int textWidth = MeasureTextScaled(text, fontSize);
+    int textHeight = ScaledFontSize(fontSize);
+    DrawTextScaled(text, (int)(r.x + (r.width - textWidth) / 2), (int)(r.y + (r.height - textHeight) / 2), fontSize, colors.text);
 
     if (hovered && IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) return true;
     return false;
-}
-
-// --- Scaled text helpers (use these anywhere instead of raw DrawText/MeasureText) ---
-static inline int ScaledFontSize(int baseFontSize) {
-    // Reference UI built for 600px height; scale linearly with current screen height
-    return std::max(8, (int)(baseFontSize * ((float)GetScreenHeight() / 600.0f)));
-}
-static inline void DrawTextScaled(const char *text, int x, int y, int baseFontSize, Color color) {
-    DrawText(text, x, y, ScaledFontSize(baseFontSize), color);
-}
-static inline int MeasureTextScaled(const char *text, int baseFontSize) {
-    return MeasureText(text, ScaledFontSize(baseFontSize));
 }
 
 int main() {
@@ -115,6 +123,11 @@ int main() {
 
     InitWindow(screenWidth, screenHeight, "Pepka");
     SetTargetFPS(60);
+
+    // Load TTF from assets (args: filename, fontSize, glyphs pointer or NULL, glyphCount)
+    // Use NULL,0 to load the default glyph set; use larger size (64) for better quality
+    gFont = LoadFontEx("assets/Calibri.ttf", 64, NULL, 0);
+    SetTextureFilter(gFont.texture, TEXTURE_FILTER_BILINEAR);
 
     // Window mode handling: support Windowed, Windowed-Fullscreen (bordered window resized to monitor),
     // and Fullscreen (real fullscreen). Use ApplyWindowMode(...) to change modes.
@@ -291,10 +304,10 @@ int main() {
         std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::tolower);
         // helper: case-insensitive contains
         auto ciContains = [](const std::string &hay, const std::string &needle)->bool {
-            std::string h = hay; std::string n = needle;
-            std::transform(h.begin(), h.end(), h.begin(), ::tolower);
-            std::transform(n.begin(), n.end(), n.begin(), ::tolower);
-            return h.find(n) != std::string::npos;
+                std::string h = hay; std::string n = needle;
+                std::transform(h.begin(), h.end(), h.begin(), ::tolower);
+                std::transform(n.begin(), n.end(), n.begin(), ::tolower);
+                return h.find(n) != std::string::npos;
         };
         
 
@@ -390,6 +403,9 @@ int main() {
         return true;
     };
 
+    // Add this near the top of main(), after InitWindow:
+    Texture2D logo = LoadTexture("assets/logo.png");
+
     while (!WindowShouldClose() && state != STATE_EXIT) {
         // Handle ESC key navigation
         if (IsKeyPressed(KEY_ESCAPE)) {
@@ -421,7 +437,7 @@ int main() {
 
         if (state == STATE_LOGIN) {
             // place title near top-center (scaled)
-            DrawTextScaled("Login", centerX - MeasureTextScaled("Login", 32)/2, RY(0.12f), 32, colors.primary);
+            DrawTextScaled("Login", centerX - MeasureTextScaled("Login", 48)/2, RY(0.12f), 48, colors.primary);
 
             // Username / Password layout (same positions used for input handling)
             // Define layout variables
@@ -438,13 +454,13 @@ int main() {
             float inputWf = (float)inputW;
             Rectangle usernameRect = { usernameRectX, usernameRectY, inputWf, inputH };
             Rectangle passwordRect = { (float)inputX, (float)(passwordRowY - 5), inputWf, inputH };
-            DrawTextScaled("Username:", labelX, rowY, 20, colors.text);
+            DrawTextScaled("Username:", labelX, rowY, 24, colors.text);
             DrawRectangleRec(usernameRect, colors.inputBg);
             DrawTextScaled(username, (int)usernameRect.x + 6, (int)usernameRect.y + 6, 20, colors.text);
             if (inputFocus == 0) DrawRectangleLinesEx(usernameRect, 2, colors.accent);
 
             // Password field with show/hide button
-            DrawTextScaled("Password:", labelX, passwordRowY, 20, colors.text);
+            DrawTextScaled("Password:", labelX, passwordRowY, 24, colors.text);
             DrawRectangleRec(passwordRect, colors.inputBg);
             std::string passDisplay = showPassword ? password : std::string(strlen(password), '*');
             DrawTextScaled(passDisplay.c_str(), (int)passwordRect.x + 6, (int)passwordRect.y + 6, 20, colors.text);
@@ -538,14 +554,14 @@ int main() {
 
             // Username field
             Rectangle usernameRect = { (float)rInputX, (float)(rY - 5), (float)rInputW, inputH };
-            DrawTextScaled("Username:", rLabelX, rY, 20, colors.text);
+            DrawTextScaled("Username:", rLabelX, rY, 24, colors.text);
             DrawRectangleRec(usernameRect, colors.inputBg);
             DrawTextScaled(regUsername, (int)usernameRect.x + 6, (int)usernameRect.y + 6, 20, colors.text);
             if (regInputFocus == 0) DrawRectangleLinesEx(usernameRect, 2, colors.accent);
 
             // Password field
             Rectangle passwordRect = { (float)rInputX, (float)(rY + RH(0.078f)), (float)rInputW, inputH };
-            DrawTextScaled("Password:", rLabelX, rY + RH(0.083f), 20, colors.text);
+            DrawTextScaled("Password:", rLabelX, rY + RH(0.083f), 24, colors.text);
             DrawRectangleRec(passwordRect, colors.inputBg);
             std::string passDisplay = regShowPassword ? regPassword : std::string(strlen(regPassword), '*');
             DrawTextScaled(passDisplay.c_str(), (int)passwordRect.x + 6, (int)passwordRect.y + 6, 20, colors.text);
@@ -610,7 +626,7 @@ int main() {
             Rectangle backBtn = { (float)RX(0.30f), (float)RY(0.55f), (float)RW(0.15f), (float)RH(0.06f) };
             Rectangle registerBtn = { (float)RX(0.55f), (float)RY(0.55f), (float)RW(0.15f), (float)RH(0.06f) };
 
-            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) {
                 state = STATE_LOGIN;
             }
             if (DrawButton(registerBtn, "Register", colors.primary, colors, 16)) {
@@ -656,7 +672,7 @@ int main() {
             // Logout button in top-left (use margin)
             float margin = 0.025f;
             Rectangle logoutBtn = { (float)RX(margin), (float)RY(margin), (float)RW(0.125f), (float)RH(0.05f) };
-            if (DrawButton(logoutBtn, "← Logout", colors.buttonBg, colors, 16)) {
+            if (DrawButton(logoutBtn, "< Logout", colors.buttonBg, colors, 16)) {
                  // Clear user data and return to login
                  currentUser = "";
                  isAdmin = false;
@@ -679,16 +695,28 @@ int main() {
             if (isAdmin) userInfo += " (Admin)";
             DrawTextScaled(userInfo.c_str(), (int)(optionsBtn.x - 10 - MeasureTextScaled(userInfo.c_str(), 16)), RY(margin) + 6, 16, colors.accent);
              
-            // Title and centered menu buttons
-            DrawTextScaled("Pepka", centerX - MeasureTextScaled("Pepka", 60)/2, RY(0.18f), 60, colors.primary);
+            // Title and logo side by side, centered at the gap
+            int titleWidth = MeasureTextScaled("Pepka", 60);
+            float logoScale = 0.5f; // adjust this to make the logo smaller/larger
+            int scaledLogoWidth = (int)(logo.width * logoScale);
+            int gap = 20; // gap between text and logo
+            
+            // Calculate positions so the gap is at screen center
+            int pepkaX = centerX - (titleWidth + gap/2); // Text ends at center minus half gap
+            float textHeight = (float)ScaledFontSize(60);
+            Vector2 logoPos = { (float)(centerX + gap/2), // Logo starts at center plus half gap
+                               (float)RY(0.25f) + (textHeight - logo.height * logoScale) / 2.0f };
+            
+            DrawTextScaled("Pepka", pepkaX, RY(0.25f), 60, colors.primary);
+            DrawTextureEx(logo, logoPos, 0.0f, logoScale, WHITE);
 
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)RY(0.45f), (float)RW(0.25f), (float)RH(0.1f) };
-             if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 20)) state = STATE_CATALOG;
+             if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_CATALOG;
 
             // Only show Add Product button if admin
             if (isAdmin) {
                 Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)RY(0.62f), (float)RW(0.25f), (float)RH(0.1f) };
-                if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 20)) state = STATE_ADD_PRODUCT;
+                if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 28)) state = STATE_ADD_PRODUCT;
                 
                 // Move selector highlight based on menu index
                 Rectangle selector = { btnView.x, btnView.y + menuIndex * (btnAdd.y - btnView.y), btnView.width, btnView.height };
@@ -714,7 +742,7 @@ int main() {
             if (DrawButton(catBaby, "Baby", colors.buttonBg, colors, 20)) { selectedCategory = 4; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
 
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load & sort once
@@ -724,15 +752,16 @@ int main() {
             // responsive layout for list
             float margin = 0.025f;
             Rectangle backBtn = { (float)RX(margin), (float)RY(margin), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
 
-            DrawText("Product List", centerX - MeasureText("Product List", 28)/2, RY(0.05f), 28, DARKBLUE);
+            // Use Calibri for headings
+            DrawTextScaled("Product List", centerX - MeasureTextScaled("Product List", 40)/2, RY(0.05f), 40, DARKBLUE);
 
             // Search area
-            DrawText("Search:", RX(0.025f), RY(0.12f), 18, colors.text);
+            DrawTextScaled("Search:", RX(0.025f), RY(0.12f), 18, colors.text);
             Rectangle searchRect = { (float)RX(0.12f), (float)RY(0.11f), (float)RW(0.30f), (float)RH(0.05f) };
             DrawRectangleRec(searchRect, LIGHTGRAY);
-            DrawText(searchInput, (int)searchRect.x + 6, (int)searchRect.y + 6, 18, BLACK);
+            DrawTextScaled(searchInput, (int)searchRect.x + 6, (int)searchRect.y + 6, 18, BLACK);
             if (searchActive) DrawRectangleLinesEx(searchRect, 2, BLUE);
 
             Vector2 mouse = GetMousePosition();
@@ -765,12 +794,12 @@ int main() {
             if (DrawButton(sortSizeDescBtn, "Size v", (sortMode==4)?LIME:sortBtnColor, colors, 14)) { sortMode=4; needsResort=true; }
 
             // Info
-            if (!searchInput[0] && sortMode == 0) DrawText("Showing all products", RX(0.025f), RY(0.17f), 16, GRAY);
+            if (!searchInput[0] && sortMode == 0) DrawTextScaled("Showing all products", RX(0.025f), RY(0.17f), 16, GRAY);
             else {
                 static std::string msg = "";
                 std::string info = "Showing " + std::to_string(filteredProducts.size()) + " of " + std::to_string(products.size()) + " products";
                 if (searchInput[0]) info += " (filtered)";
-                DrawText(info.c_str(), RX(0.025f), RY(0.17f), 16, GRAY);
+                DrawTextScaled(info.c_str(), RX(0.025f), RY(0.17f), 16, GRAY);
             }
 
             // Scroll & list
@@ -785,9 +814,9 @@ int main() {
 
             float startY = RY(0.23f);
             if (products.empty()) {
-                DrawText("No products found. Create 'data/products.txt' with one product per line (name;price).", RX(0.05f), RY(0.35f), 18, RED);
+                DrawTextScaled("No products found. Create 'data/products.txt' with one product per line (name;price).", RX(0.05f), RY(0.35f), 18, RED);
             } else if (filteredProducts.empty()) {
-                DrawText("No products match your search criteria.", centerX - MeasureText("No products match your search criteria.", 18)/2, RY(0.40f), 18, ORANGE);
+                DrawTextScaled("No products match your search criteria.", centerX - MeasureTextScaled("No products match your search criteria.", 18)/2, RY(0.40f), 18, ORANGE);
             } else {
                 static int viewDescriptionIndex = -1;
                 for (size_t i = 0; i < filteredProducts.size(); ++i) {
@@ -843,12 +872,13 @@ int main() {
         else if (state == STATE_ADD_PRODUCT) {
             // Back button
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
 
             DrawTextScaled("Add Product", centerX - MeasureTextScaled("Add Product", 28)/2, RY(0.05f), 28, colors.primary);
             // Quick link to Edit Products
             Rectangle editProductsBtn = { (float)(sw - RW(0.18f)), (float)RY(0.025f), (float)RW(0.16f), (float)RH(0.05f) };
             if (DrawButton(editProductsBtn, "Edit Products", colors.buttonBg, colors, 14)) state = STATE_EDIT_PRODUCTS;
+            DrawTextScaled("Add Product", centerX - MeasureTextScaled("Add Product", 40)/2, RY(0.05f), 40, colors.primary);
 
             if (currentUser.empty() || !isAdmin) {
                 DrawTextScaled("Admin privileges required to add products.", centerX - MeasureTextScaled("Admin privileges required to add products.", 20)/2, RY(0.20f), 20, colors.accent);
@@ -883,12 +913,12 @@ int main() {
                 Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH_add;
 
                 // Draw labels and inputs
-                DrawTextScaled("Name:", labelX, (int)nameRect.y + 6, 20, colors.text);
+                DrawTextScaled("Name:", labelX, (int)nameRect.y + 6, 24, colors.text);
                 DrawRectangleRec(nameRect, colors.inputBg);
                 DrawTextScaled(nameInput.c_str(), (int)nameRect.x + 8, (int)nameRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
 
-                DrawTextScaled("Price:", labelX, (int)priceRect.y + 6, 20, colors.text);
+                DrawTextScaled("Price:", labelX, (int)priceRect.y + 6, 24, colors.text);
                 DrawRectangleRec(priceRect, colors.inputBg);
                 DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
@@ -903,7 +933,7 @@ int main() {
                 }
 
                 // Size selection — buttons centered inside sizeAreaRect
-                DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
+                DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 24, colors.text);
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
                 float sbtnW = RW(0.09f), sbtnH = inputH * 0.9f, sGap = RW(0.02f);
                 float totalS = sbtnW * (float)sizeOptions.size() + sGap * ((float)sizeOptions.size() - 1.0f);
@@ -916,8 +946,45 @@ int main() {
                     if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, colors.accent);
                 }
 
-                // Remove input (also used to type a name to Load for editing)
+                // Remove input
+                DrawTextScaled("Remove product:", labelX, (int)removeRect.y + 6, 20, colors.text);
+                DrawRectangleRec(removeRect, colors.inputBg);
+                DrawTextScaled(removeInput.c_str(), (int)removeRect.x + 8, (int)removeRect.y + 6, 18, colors.text);
+                if (activeFieldAdd == 2) DrawRectangleLinesEx(removeRect, 2, colors.accent);
 
+                // Small Load button to fetch an existing product by name into the form for editing
+                float loadW = RW(0.12f);
+                Rectangle loadBtn = { removeRect.x + removeRect.width + RW(0.02f), removeRect.y, loadW, removeRect.height };
+                if (DrawButton(loadBtn, "Load", colors.buttonBg, colors, 16)) {
+                    // Ensure products are loaded
+                    if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); }
+                    editingIndex = -1;
+                    std::string target = removeInput;
+                    auto toLower = [](const std::string &s){ std::string out=s; std::transform(out.begin(), out.end(), out.begin(), ::tolower); return out; };
+                    std::string targetL = toLower(target);
+                    for (size_t i = 0; i < products.size(); ++i) {
+                        std::string nameL = toLower(products[i].name);
+                        if (nameL == targetL) {
+                            // populate form
+                            nameInput = products[i].name;
+                            if (products[i].hasPrice) {
+                                std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << products[i].price; priceInput = ss.str();
+                            } else priceInput.clear();
+                            sizeInput = products[i].size;
+                            // map sex token to selectedCategoryAdd
+                            std::string sex = products[i].sex; std::transform(sex.begin(), sex.end(), sex.begin(), ::tolower);
+                            if (sex == "m") selectedCategoryAdd = 1;
+                            else if (sex == "w") selectedCategoryAdd = 2;
+                            else if (sex == "k") selectedCategoryAdd = 3;
+                            else if (sex == "b") selectedCategoryAdd = 4;
+                            else selectedCategoryAdd = 0;
+                            editingIndex = (int)i;
+                            msg = "Loaded product for edit: " + products[i].name;
+                            break;
+                        }
+                    }
+                    if (editingIndex == -1) msg = "No product with that name found";
+                }
 
                 // Click-to-focus
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
@@ -1257,7 +1324,7 @@ int main() {
          else if (state == STATE_OPTIONS) {
               // Back button
              Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-             if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) {
+             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) {
                   state = STATE_MENU;
               }
              DrawTextScaled("Options", centerX - MeasureTextScaled("Options", 32)/2, RY(0.12f), 32, colors.primary);
@@ -1266,7 +1333,7 @@ int main() {
 
              // Theme selection section (responsive layout)
              float sectionTop = RY(0.22f);
-             DrawText("Theme:", centerX - MeasureText("Theme:", 24)/2, sectionTop, 24, colors.text);
+             DrawTextScaled("Theme:", centerX - MeasureTextScaled("Theme:", 24)/2, sectionTop, 24, colors.text);
 
              float themeBtnW = RW(0.20f);
              float themeBtnH = RH(0.08f);
@@ -1289,7 +1356,7 @@ int main() {
 
             // Window mode selection: Windowed, Windowed-Fullscreen, Fullscreen (spaced horizontally)
             float winSectionY = themeY + themeBtnH + RH(0.06f);
-            DrawText("Window Mode:", centerX - MeasureText("Window Mode:", 24)/2, winSectionY, 24, colors.text);
+            DrawTextScaled("Window Mode:", centerX - MeasureTextScaled("Window Mode:", 24)/2, winSectionY, 24, colors.text);
             float winBtnsY = winSectionY + RH(0.06f);
             float winBtnW = RW(0.18f);
             float winBtnH = RH(0.08f);
@@ -1318,6 +1385,9 @@ int main() {
          EndDrawing();
     }
 
+    // at exit, unload the font
+    UnloadFont(gFont);
+    UnloadTexture(logo);
     CloseWindow();
     std::cout << "Exiting application." << std::endl;
     return 0;
