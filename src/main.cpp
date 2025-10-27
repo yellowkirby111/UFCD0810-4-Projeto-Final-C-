@@ -1114,7 +1114,7 @@ int main() {
 
             // Back to Add Product screen
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_ADD_PRODUCT;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_ADD_PRODUCT;
 
             DrawTextScaled("Edit Products", centerX - MeasureTextScaled("Edit Products", 28)/2, RY(0.08f), 28, colors.primary);
 
@@ -1141,7 +1141,7 @@ int main() {
             else {
                 // Back button
                 Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-                if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_EDIT_PRODUCTS;
+                if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_EDIT_PRODUCTS;
 
                 DrawTextScaled("Edit Product", centerX - MeasureTextScaled("Edit Product", 28)/2, RY(0.05f), 28, colors.primary);
 
@@ -1303,7 +1303,6 @@ int main() {
                   state = STATE_MENU;
               }
              DrawTextScaled("Options", centerX - MeasureTextScaled("Options", 32)/2, RY(0.12f), 32, colors.primary);
-             DrawTextScaled("Press ESC or click Back to return to menu", centerX - MeasureTextScaled("Press ESC or click Back to return to menu", 16)/2, RY(0.17f), 16, colors.accent);
              
 
              // Theme selection section (responsive layout)
