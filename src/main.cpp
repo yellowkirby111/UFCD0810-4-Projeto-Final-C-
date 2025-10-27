@@ -412,10 +412,10 @@ int main() {
         // Responsive helpers (used by the drawing/input code)
         int sw = GetScreenWidth();
         int sh = GetScreenHeight();
-        auto RX = [&](float px)->int { return (int)(px * sw); }; // relative x (0..1)
-        auto RY = [&](float py)->int { return (int)(py * sh); }; // relative y (0..1)
-        auto RW = [&](float pw)->int { return (int)(pw * sw); }; // relative width
-        auto RH = [&](float ph)->int { return (int)(ph * sh); }; // relative height
+    auto RX = [&](float px)->float { return px * (float)sw; }; // relative x (0..1)
+    auto RY = [&](float py)->float { return py * (float)sh; }; // relative y (0..1)
+    auto RW = [&](float pw)->float { return pw * (float)sw; }; // relative width
+    auto RH = [&](float ph)->float { return ph * (float)sh; }; // relative height
         int centerX = sw / 2;
 
         if (state == STATE_LOGIN) {
@@ -753,10 +753,10 @@ int main() {
             // Sorting buttons
             float sortStartX = RX(0.45f);
             float sortW = RW(0.12f); float sortH = RH(0.05f); float sortGap = RW(0.02f);
-            Rectangle sortPriceAscBtn = { sortStartX, RY(0.11f), sortW, sortH };
-            Rectangle sortPriceDescBtn = { sortStartX + sortW + sortGap, RY(0.11f), sortW, sortH };
-            Rectangle sortSizeAscBtn = { sortStartX + (sortW+sortGap)*2, RY(0.11f), sortW, sortH };
-            Rectangle sortSizeDescBtn = { sortStartX + (sortW+sortGap)*3, RY(0.11f), sortW, sortH };
+            Rectangle sortPriceAscBtn = { sortStartX, (float)RY(0.11f), sortW, sortH };
+            Rectangle sortPriceDescBtn = { sortStartX + sortW + sortGap, (float)RY(0.11f), sortW, sortH };
+            Rectangle sortSizeAscBtn = { sortStartX + (sortW+sortGap)*2, (float)RY(0.11f), sortW, sortH };
+            Rectangle sortSizeDescBtn = { sortStartX + (sortW+sortGap)*3, (float)RY(0.11f), sortW, sortH };
             Color sortBtnColor = colors.buttonBg;
             if (DrawButton(sortPriceAscBtn, "Price ^", (sortMode==1)?LIME:sortBtnColor, colors, 14)) { sortMode=1; needsResort=true; }
             if (DrawButton(sortPriceDescBtn, "Price v", (sortMode==2)?LIME:sortBtnColor, colors, 14)) { sortMode=2; needsResort=true; }
@@ -804,8 +804,8 @@ int main() {
 
                 if (viewDescriptionIndex >= 0 && viewDescriptionIndex < (int)filteredProducts.size()) {
                     const auto &p = filteredProducts[viewDescriptionIndex];
-                    float modalW = RW(0.75f), modalH = RH(0.55f);
-                    Rectangle modal = { (float)(centerX - modalW/2), RY(0.18f), modalW, modalH };
+                    float modalW = (float)RW(0.75f), modalH = (float)RH(0.55f);
+                    Rectangle modal; modal.x = (float)(centerX - modalW/2.0f); modal.y = (float)RY(0.18f); modal.width = modalW; modal.height = modalH;
                     DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(modal, 2, colors.accent);
                     DrawTextScaled(p.name.c_str(), (int)modal.x + 20, (int)modal.y + 18, 24, colors.text);
 
@@ -834,7 +834,7 @@ int main() {
                         else lineBuf = tryLine;
                     }
                     if (!lineBuf.empty()) DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
-                    Rectangle closeBtn = { modal.x + modal.width - RW(0.12f), modal.y + modal.height - RH(0.08f), RW(0.12f), RH(0.08f) };
+                    Rectangle closeBtn; closeBtn.x = (float)(modal.x + modal.width - (float)RW(0.12f)); closeBtn.y = (float)(modal.y + modal.height - (float)RH(0.08f)); closeBtn.width = (float)RW(0.12f); closeBtn.height = (float)RH(0.08f);
                     if (DrawButton(closeBtn, "Close", colors.buttonBg, colors, 16)) viewDescriptionIndex = -1;
                 }
             }
@@ -852,7 +852,7 @@ int main() {
             if (currentUser.empty() || !isAdmin) {
                 DrawTextScaled("Admin privileges required to add products.", centerX - MeasureTextScaled("Admin privileges required to add products.", 20)/2, RY(0.20f), 20, colors.accent);
                 DrawTextScaled("Please login with an admin account.", centerX - MeasureTextScaled("Please login with an admin account.", 18)/2, RY(0.26f), 18, colors.text);
-                Rectangle btnToLogin = { (float)(centerX - RW(0.15f)), RY(0.36f), (float)RW(0.30f), (float)RH(0.08f) };
+                Rectangle btnToLogin; btnToLogin.x = (float)(centerX - (float)RW(0.15f)); btnToLogin.y = (float)RY(0.36f); btnToLogin.width = (float)RW(0.30f); btnToLogin.height = (float)RH(0.08f);
                 if (DrawButton(btnToLogin, "Go to Login", colors.buttonBg, colors, 20)) { memset(username,0,sizeof(username)); memset(password,0,sizeof(password)); state = STATE_LOGIN; }
             } else {
                 // Responsive, centered Add Product form
@@ -878,7 +878,8 @@ int main() {
                 // reserve remaining width for category buttons area (not used as a rect here)
                 Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
                 float descY = sizeAreaRect.y + inputH + gapV * 1.2f;
-                Rectangle descRect = { inputX, descY, fullW, RH(0.18f) };
+                float descH_add = (float)RH(0.18f);
+                Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH_add;
                 Rectangle removeRect = { inputX, sizeAreaRect.y + inputH + gapV, fullW * 0.68f, inputH };
 
                 // Draw labels and inputs
@@ -1180,7 +1181,7 @@ int main() {
                 // Description rectangle computed now so click handling can reference it
                 float descY = actionY + actionH + (float)RH(0.02f);
                 float descH = (float)RH(0.18f);
-                Rectangle descRect = { inputX, descY, fullW, descH };
+                Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH;
 
                 // Click-to-focus and keyboard input for Name/Price/Description fields
                 static int editFieldFocus = 0; // 0=name, 1=price, 2=none
