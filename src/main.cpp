@@ -887,8 +887,8 @@ int main() {
                 if (DrawButton(btnToLogin, "Go to Login", colors.buttonBg, colors, 20)) { memset(username,0,sizeof(username)); memset(password,0,sizeof(password)); state = STATE_LOGIN; }
             } else {
                 // Responsive, centered Add Product form
-                static std::string nameInput, priceInput, sizeInput, msg;
-                static int activeFieldAdd = 0; // 0=name,1=price
+                static std::string nameInput, priceInput, sizeInput, removeInput, msg;
+                static int activeFieldAdd = 0; // 0=name,1=price,2=remove
                 static int editingIndex = -1; // index in products when editing, -1 = new
 
                 // Layout metrics
@@ -946,6 +946,8 @@ int main() {
                     if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, colors.accent);
                 }
 
+                // Load product input (for editing existing products)
+                Rectangle removeRect = { inputX, descY + descH_add + gapV, fullW * 0.6f, inputH };
                 // Remove input
                 DrawTextScaled("Remove product:", labelX, (int)removeRect.y + 6, 20, colors.text);
                 DrawRectangleRec(removeRect, colors.inputBg);
@@ -990,6 +992,7 @@ int main() {
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                     if (CheckCollisionPointRec(mouse, nameRect)) activeFieldAdd = 0;
                     else if (CheckCollisionPointRec(mouse, priceRect)) activeFieldAdd = 1;
+                    else if (CheckCollisionPointRec(mouse, removeRect)) activeFieldAdd = 2;
                     else activeFieldAdd = 0;
                 }
 
@@ -999,16 +1002,16 @@ int main() {
                     if (cp >= 32 && cp <= 125) {
                         if (activeFieldAdd == 0 && nameInput.size() < 200) nameInput.push_back((char)cp);
                         else if (activeFieldAdd == 1 && priceInput.size() < 64) priceInput.push_back((char)cp);
-                        /* load input removed */
+                        else if (activeFieldAdd == 2 && removeInput.size() < 200) removeInput.push_back((char)cp);
                     }
                     cp = GetCharPressed();
                 }
                 if (IsKeyPressed(KEY_BACKSPACE)) {
                     if (activeFieldAdd == 0 && !nameInput.empty()) nameInput.pop_back();
                     else if (activeFieldAdd == 1 && !priceInput.empty()) priceInput.pop_back();
-                    /* load input removed */
+                    else if (activeFieldAdd == 2 && !removeInput.empty()) removeInput.pop_back();
                 }
-                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 2;
+                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 3;
 
                 // Action buttons centered (Save, Cancel)
                 float actionY = sizeAreaRect.y + inputH + gapV;
