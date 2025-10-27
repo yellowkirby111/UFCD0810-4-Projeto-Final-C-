@@ -1195,7 +1195,7 @@ int main() {
                 // draw focus indicators
                 if (editFieldFocus == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
                 if (editFieldFocus == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
-                if (descFocus) DrawRectangleLinesEx(descRect, 2, colors.accent);
+                // (desc focus border will be drawn after the description area is rendered so it is visible)
 
                 // Text input handling routed by focus
                 int ch = GetCharPressed();
@@ -1230,7 +1230,7 @@ int main() {
                             std::string sizeToken = editSize;
                             std::string sexToken;
                             if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
-                            // include description field (use outer editDescription variable)
+                            // include description field (use outer editDescription)
                             std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
                             lines[editProductIndex] = newline.str();
                             std::ofstream ofs("data/products.txt", std::ios::trunc);
@@ -1251,6 +1251,16 @@ int main() {
                     DrawTextScaled(tokenLine.c_str(), (int)descRect.x + 6, lineY, 16, colors.text);
                     lineY += 20;
                 }
+
+                // Debug overlay: show focus and input state to help diagnose why typing may not register
+                {
+                    bool mouseInDesc = CheckCollisionPointRec(mousePos, descRect);
+                    std::ostringstream dbg; dbg << "descFocus=" << (descFocus?"1":"0") << " editFieldFocus=" << editFieldFocus << " descLen=" << editDescription.size() << " mouseInDesc=" << (mouseInDesc?"1":"0");
+                    DrawTextScaled(dbg.str().c_str(), (int)inputX, (int)(descRect.y + descRect.height + 8), 14, colors.accent);
+                }
+
+                // Draw focus border for description (after the rect/content so it remains visible)
+                if (descFocus) DrawRectangleLinesEx(descRect, 2, colors.accent);
 
                 // (input handled above routed by focus)
             }
