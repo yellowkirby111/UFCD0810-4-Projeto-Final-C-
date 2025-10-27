@@ -309,7 +309,23 @@ int main() {
                 std::transform(n.begin(), n.end(), n.begin(), ::tolower);
                 return h.find(n) != std::string::npos;
         };
-        
+
+        // Size ranking helper: XXS, XS, S, M, L, XL, XXL (unknown sizes fall back to lexicographic but rank after known ones)
+        auto sizeRank = [](const std::string &s)->int {
+            std::string t = s;
+            std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+            if (t == "xxs") return 0;
+            if (t == "xs")  return 1;
+            if (t == "s")   return 2;
+            if (t == "m")   return 3;
+            if (t == "l")   return 4;
+            if (t == "xl")  return 5;
+            if (t == "xxl" || t == "2xl") return 6;
+            // Unknown sizes: put them after known sizes but keep a deterministic ordering
+            int h = 100;
+            for (char c : t) h = h * 31 + (int)c;
+            return h;
+        };
 
         // Filter by category then search term
         for (const auto& product : products) {
@@ -341,7 +357,7 @@ int main() {
                 }
             }
         }
-        
+
         // Sort filtered products
         switch (sortMode) {
             case 1: // Price ascending
@@ -358,18 +374,28 @@ int main() {
                     return a.price > b.price;
                 });
                 break;
-            case 3: // Size ascending
-                std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
-                    if (a.size.empty() != b.size.empty()) return !a.size.empty(); // items with size first
-                    if (a.size.empty() && b.size.empty()) return a.name < b.name;
-                    return a.size < b.size;
+            case 3: // Size ascending (use sizeRank for natural ordering)
+                std::sort(filteredProducts.begin(), filteredProducts.end(), [&](const Product &a, const Product &b) {
+                    bool aHas = !a.size.empty();
+                    bool bHas = !b.size.empty();
+                    if (aHas != bHas) return aHas; // items with size first
+                    if (!aHas && !bHas) return a.name < b.name;
+                    int ra = sizeRank(a.size);
+                    int rb = sizeRank(b.size);
+                    if (ra != rb) return ra < rb;
+                    return a.name < b.name;
                 });
                 break;
-            case 4: // Size descending
-                std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
-                    if (a.size.empty() != b.size.empty()) return !a.size.empty(); // items with size first
-                    if (a.size.empty() && b.size.empty()) return a.name < b.name;
-                    return a.size > b.size;
+            case 4: // Size descending (reverse rank)
+                std::sort(filteredProducts.begin(), filteredProducts.end(), [&](const Product &a, const Product &b) {
+                    bool aHas = !a.size.empty();
+                    bool bHas = !b.size.empty();
+                    if (aHas != bHas) return aHas; // items with size first
+                    if (!aHas && !bHas) return a.name < b.name;
+                    int ra = sizeRank(a.size);
+                    int rb = sizeRank(b.size);
+                    if (ra != rb) return ra > rb;
+                    return a.name < b.name;
                 });
                 break;
             default: // Default sorting (original logic)
@@ -736,10 +762,10 @@ int main() {
             Rectangle catMen = { startX + (btnW + gap), y, btnW, btnH };
             Rectangle catWomen = { startX, y + btnH + RH(0.04f), btnW, btnH };
             Rectangle catBaby = { startX + (btnW + gap), y + btnH + RH(0.04f), btnW, btnH };
-            if (DrawButton(catKids, "Kid", colors.buttonBg, colors, 20)) { selectedCategory = 1; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
-            if (DrawButton(catMen, "Man", colors.buttonBg, colors, 20)) { selectedCategory = 2; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
-            if (DrawButton(catWomen, "Women", colors.buttonBg, colors, 20)) { selectedCategory = 3; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
-            if (DrawButton(catBaby, "Baby", colors.buttonBg, colors, 20)) { selectedCategory = 4; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catKids, "Kid", colors.buttonBg, colors, 28)) { selectedCategory = 1; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catMen, "Man", colors.buttonBg, colors, 28)) { selectedCategory = 2; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catWomen, "Women", colors.buttonBg, colors, 28)) { selectedCategory = 3; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catBaby, "Baby", colors.buttonBg, colors, 28)) { selectedCategory = 4; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
 
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
