@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -229,6 +229,7 @@ int main() {
     int sortMode = 0; // 0=default, 1=price asc, 2=price desc, 3=size asc, 4=size desc
     bool needsResort = true;
     int selectedCategory = 0; // 0=All,1=Criança,2=Homem,3=Mulher,4=Bebê
+    int editProductIndex = -1; // used by Edit Products screens
 
     auto LoadProducts = [&](const std::string &path) -> bool {
         products.clear();
@@ -427,10 +428,10 @@ int main() {
         // Responsive helpers (used by the drawing/input code)
         int sw = GetScreenWidth();
         int sh = GetScreenHeight();
-        auto RX = [&](float px)->int { return (int)(px * sw); }; // relative x (0..1)
-        auto RY = [&](float py)->int { return (int)(py * sh); }; // relative y (0..1)
-        auto RW = [&](float pw)->int { return (int)(pw * sw); }; // relative width
-        auto RH = [&](float ph)->int { return (int)(ph * sh); }; // relative height
+    auto RX = [&](float px)->float { return px * (float)sw; }; // relative x (0..1)
+    auto RY = [&](float py)->float { return py * (float)sh; }; // relative y (0..1)
+    auto RW = [&](float pw)->float { return pw * (float)sw; }; // relative width
+    auto RH = [&](float ph)->float { return ph * (float)sh; }; // relative height
         int centerX = sw / 2;
 
         if (state == STATE_LOGIN) {
@@ -781,10 +782,10 @@ int main() {
             // Sorting buttons
             float sortStartX = RX(0.45f);
             float sortW = RW(0.12f); float sortH = RH(0.05f); float sortGap = RW(0.02f);
-            Rectangle sortPriceAscBtn = { sortStartX, RY(0.11f), sortW, sortH };
-            Rectangle sortPriceDescBtn = { sortStartX + sortW + sortGap, RY(0.11f), sortW, sortH };
-            Rectangle sortSizeAscBtn = { sortStartX + (sortW+sortGap)*2, RY(0.11f), sortW, sortH };
-            Rectangle sortSizeDescBtn = { sortStartX + (sortW+sortGap)*3, RY(0.11f), sortW, sortH };
+            Rectangle sortPriceAscBtn = { sortStartX, (float)RY(0.11f), sortW, sortH };
+            Rectangle sortPriceDescBtn = { sortStartX + sortW + sortGap, (float)RY(0.11f), sortW, sortH };
+            Rectangle sortSizeAscBtn = { sortStartX + (sortW+sortGap)*2, (float)RY(0.11f), sortW, sortH };
+            Rectangle sortSizeDescBtn = { sortStartX + (sortW+sortGap)*3, (float)RY(0.11f), sortW, sortH };
             Color sortBtnColor = colors.buttonBg;
             if (DrawButton(sortPriceAscBtn, "Price ^", (sortMode==1)?LIME:sortBtnColor, colors, 14)) { sortMode=1; needsResort=true; }
             if (DrawButton(sortPriceDescBtn, "Price v", (sortMode==2)?LIME:sortBtnColor, colors, 14)) { sortMode=2; needsResort=true; }
@@ -794,6 +795,7 @@ int main() {
             // Info
             if (!searchInput[0] && sortMode == 0) DrawTextScaled("Showing all products", RX(0.025f), RY(0.17f), 16, GRAY);
             else {
+                static std::string msg = "";
                 std::string info = "Showing " + std::to_string(filteredProducts.size()) + " of " + std::to_string(products.size()) + " products";
                 if (searchInput[0]) info += " (filtered)";
                 DrawTextScaled(info.c_str(), RX(0.025f), RY(0.17f), 16, GRAY);
@@ -831,8 +833,8 @@ int main() {
 
                 if (viewDescriptionIndex >= 0 && viewDescriptionIndex < (int)filteredProducts.size()) {
                     const auto &p = filteredProducts[viewDescriptionIndex];
-                    float modalW = RW(0.75f), modalH = RH(0.55f);
-                    Rectangle modal = { (float)(centerX - modalW/2), RY(0.18f), modalW, modalH };
+                    float modalW = (float)RW(0.75f), modalH = (float)RH(0.55f);
+                    Rectangle modal; modal.x = (float)(centerX - modalW/2.0f); modal.y = (float)RY(0.18f); modal.width = modalW; modal.height = modalH;
                     DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(modal, 2, colors.accent);
                     DrawTextScaled(p.name.c_str(), (int)modal.x + 20, (int)modal.y + 18, 24, colors.text);
 
@@ -861,7 +863,7 @@ int main() {
                         else lineBuf = tryLine;
                     }
                     if (!lineBuf.empty()) DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
-                    Rectangle closeBtn = { modal.x + modal.width - RW(0.12f), modal.y + modal.height - RH(0.08f), RW(0.12f), RH(0.08f) };
+                    Rectangle closeBtn; closeBtn.x = (float)(modal.x + modal.width - (float)RW(0.12f)); closeBtn.y = (float)(modal.y + modal.height - (float)RH(0.08f)); closeBtn.width = (float)RW(0.12f); closeBtn.height = (float)RH(0.08f);
                     if (DrawButton(closeBtn, "Close", colors.buttonBg, colors, 16)) viewDescriptionIndex = -1;
                 }
             }
@@ -871,17 +873,22 @@ int main() {
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
 
+            DrawTextScaled("Add Product", centerX - MeasureTextScaled("Add Product", 28)/2, RY(0.05f), 28, colors.primary);
+            // Quick link to Edit Products
+            Rectangle editProductsBtn = { (float)(sw - RW(0.18f)), (float)RY(0.025f), (float)RW(0.16f), (float)RH(0.05f) };
+            if (DrawButton(editProductsBtn, "Edit Products", colors.buttonBg, colors, 14)) state = STATE_EDIT_PRODUCTS;
             DrawTextScaled("Add Product", centerX - MeasureTextScaled("Add Product", 40)/2, RY(0.05f), 40, colors.primary);
 
             if (currentUser.empty() || !isAdmin) {
                 DrawTextScaled("Admin privileges required to add products.", centerX - MeasureTextScaled("Admin privileges required to add products.", 20)/2, RY(0.20f), 20, colors.accent);
                 DrawTextScaled("Please login with an admin account.", centerX - MeasureTextScaled("Please login with an admin account.", 18)/2, RY(0.26f), 18, colors.text);
-                Rectangle btnToLogin = { (float)(centerX - RW(0.15f)), RY(0.36f), (float)RW(0.30f), (float)RH(0.08f) };
+                Rectangle btnToLogin; btnToLogin.x = (float)(centerX - (float)RW(0.15f)); btnToLogin.y = (float)RY(0.36f); btnToLogin.width = (float)RW(0.30f); btnToLogin.height = (float)RH(0.08f);
                 if (DrawButton(btnToLogin, "Go to Login", colors.buttonBg, colors, 20)) { memset(username,0,sizeof(username)); memset(password,0,sizeof(password)); state = STATE_LOGIN; }
             } else {
                 // Responsive, centered Add Product form
                 static std::string nameInput, priceInput, sizeInput, removeInput, msg;
                 static int activeFieldAdd = 0; // 0=name,1=price,2=remove
+                static int editingIndex = -1; // index in products when editing, -1 = new
 
                 // Layout metrics
                 float topY = RY(0.10f);
@@ -900,7 +907,10 @@ int main() {
                 float catGap = RW(0.015f);
                 // reserve remaining width for category buttons area (not used as a rect here)
                 Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
-                Rectangle removeRect = { inputX, sizeAreaRect.y + inputH + gapV, fullW, inputH };
+                float descY = sizeAreaRect.y + inputH + gapV * 1.2f;
+                float descH_add = (float)RH(0.18f);
+                Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH_add;
+                Rectangle removeRect = { inputX, sizeAreaRect.y + inputH + gapV, fullW * 0.68f, inputH };
 
                 // Draw labels and inputs
                 DrawTextScaled("Name:", labelX, (int)nameRect.y + 6, 24, colors.text);
@@ -937,10 +947,44 @@ int main() {
                 }
 
                 // Remove input
-                DrawTextScaled("Remove product:", labelX, (int)removeRect.y + 6, 24, colors.text);
+                DrawTextScaled("Remove product:", labelX, (int)removeRect.y + 6, 20, colors.text);
                 DrawRectangleRec(removeRect, colors.inputBg);
                 DrawTextScaled(removeInput.c_str(), (int)removeRect.x + 8, (int)removeRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 2) DrawRectangleLinesEx(removeRect, 2, colors.accent);
+
+                // Small Load button to fetch an existing product by name into the form for editing
+                float loadW = RW(0.12f);
+                Rectangle loadBtn = { removeRect.x + removeRect.width + RW(0.02f), removeRect.y, loadW, removeRect.height };
+                if (DrawButton(loadBtn, "Load", colors.buttonBg, colors, 16)) {
+                    // Ensure products are loaded
+                    if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); }
+                    editingIndex = -1;
+                    std::string target = removeInput;
+                    auto toLower = [](const std::string &s){ std::string out=s; std::transform(out.begin(), out.end(), out.begin(), ::tolower); return out; };
+                    std::string targetL = toLower(target);
+                    for (size_t i = 0; i < products.size(); ++i) {
+                        std::string nameL = toLower(products[i].name);
+                        if (nameL == targetL) {
+                            // populate form
+                            nameInput = products[i].name;
+                            if (products[i].hasPrice) {
+                                std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << products[i].price; priceInput = ss.str();
+                            } else priceInput.clear();
+                            sizeInput = products[i].size;
+                            // map sex token to selectedCategoryAdd
+                            std::string sex = products[i].sex; std::transform(sex.begin(), sex.end(), sex.begin(), ::tolower);
+                            if (sex == "m") selectedCategoryAdd = 1;
+                            else if (sex == "w") selectedCategoryAdd = 2;
+                            else if (sex == "k") selectedCategoryAdd = 3;
+                            else if (sex == "b") selectedCategoryAdd = 4;
+                            else selectedCategoryAdd = 0;
+                            editingIndex = (int)i;
+                            msg = "Loaded product for edit: " + products[i].name;
+                            break;
+                        }
+                    }
+                    if (editingIndex == -1) msg = "No product with that name found";
+                }
 
                 // Click-to-focus
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
@@ -985,23 +1029,50 @@ int main() {
                     if (!ok) msg = "Invalid price";
                     else if (nameInput.empty()) msg = "Name required";
                     else {
-                        std::ofstream ofs("data/products.txt", std::ios::app);
-                        if (ofs) {
-                            // Always write 6 fields: name;price;size;fabric;sex;description
-                            std::string sizeToken = sizeInput.empty() ? std::string() : sizeInput;
-                            std::string fabricToken = std::string();
-                            std::string sexToken;
-                            if (selectedCategoryAdd == 1) sexToken = "M";
-                            else if (selectedCategoryAdd == 2) sexToken = "W";
-                            else if (selectedCategoryAdd == 3) sexToken = "K";
-                            else if (selectedCategoryAdd == 4) sexToken = "B";
-                            else sexToken = std::string();
-                            std::string descToken = std::string();
+                        // Build the product line to write
+                        std::string sizeToken = sizeInput.empty() ? std::string() : sizeInput;
+                        std::string fabricToken = std::string();
+                        std::string sexToken;
+                        if (selectedCategoryAdd == 1) sexToken = "M";
+                        else if (selectedCategoryAdd == 2) sexToken = "W";
+                        else if (selectedCategoryAdd == 3) sexToken = "K";
+                        else if (selectedCategoryAdd == 4) sexToken = "B";
+                        else sexToken = std::string();
+                        std::string descToken = std::string();
+                        std::ostringstream newline;
+                        newline << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << descToken;
 
-                            ofs << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << descToken << "\n";
-                            ofs.close();
-                            msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); selectedCategoryAdd = 0; productsLoaded = false; needsResort = true;
-                        } else msg = "Failed to open file";
+                        if (editingIndex >= 0) {
+                            // Load all lines, replace the matching product line by index, and rewrite file
+                            std::ifstream ifs("data/products.txt");
+                            if (!ifs) { msg = "Failed to open products file for update"; }
+                            else {
+                                std::vector<std::string> lines; std::string line;
+                                while (std::getline(ifs, line)) lines.push_back(line);
+                                ifs.close();
+                                if (editingIndex < (int)lines.size()) {
+                                    lines[editingIndex] = newline.str();
+                                    std::ofstream ofs("data/products.txt", std::ios::trunc);
+                                    if (!ofs) { msg = "Failed to write products file"; }
+                                    else {
+                                        for (auto &l : lines) ofs << l << "\n";
+                                        ofs.close();
+                                        msg = "Product updated";
+                                        // reset form
+                                        nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); selectedCategoryAdd = 0; editingIndex = -1; productsLoaded = false; needsResort = true;
+                                    }
+                                } else {
+                                    msg = "Product index out of range";
+                                }
+                            }
+                        } else {
+                            std::ofstream ofs("data/products.txt", std::ios::app);
+                            if (ofs) {
+                                ofs << newline.str() << "\n";
+                                ofs.close();
+                                msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); removeInput.clear(); selectedCategoryAdd = 0; productsLoaded = false; needsResort = true;
+                            } else msg = "Failed to open file";
+                        }
                     }
                 }
 
@@ -1035,6 +1106,194 @@ int main() {
 
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) state = STATE_MENU;
                 if (!msg.empty()) DrawTextScaled(msg.c_str(), centerX - MeasureTextScaled(msg.c_str(), 18)/2, RY(0.86f), 18, colors.accent);
+            }
+        }
+        else if (state == STATE_EDIT_PRODUCTS) {
+            // Ensure products loaded
+            if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); }
+
+            // Back to Add Product screen
+            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_ADD_PRODUCT;
+
+            DrawTextScaled("Edit Products", centerX - MeasureTextScaled("Edit Products", 28)/2, RY(0.08f), 28, colors.primary);
+
+            // Simple scrollable list of products with Edit buttons
+            float startY = RY(0.16f);
+            float rowH = (float)RH(0.05f);
+            float y = startY;
+            for (size_t i = 0; i < products.size(); ++i) {
+                if (y > RY(0.18f) + RY(0.70f)) break; // don't render past area
+                const auto &p = products[i];
+                std::ostringstream ss; ss << p.name; if (p.hasPrice) { ss << " - $" << std::fixed << std::setprecision(2) << p.price; }
+                DrawTextScaled(ss.str().c_str(), RX(0.03f), (int)y, 18, colors.text);
+                Rectangle editBtn = { (float)(sw - RW(0.18f)), y - rowH*0.15f, (float)RW(0.14f), (float)(rowH*0.85f) };
+                if (DrawButton(editBtn, "Edit", colors.buttonBg, colors, 14)) {
+                    editProductIndex = (int)i;
+                    state = STATE_EDIT_PRODUCT;
+                }
+                y += rowH;
+            }
+        }
+        else if (state == STATE_EDIT_PRODUCT) {
+            // Edit a single product by index
+            if (editProductIndex < 0 || editProductIndex >= (int)products.size()) { state = STATE_EDIT_PRODUCTS; }
+            else {
+                // Back button
+                Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+                if (DrawButton(backBtn, "← Back", colors.buttonBg, colors, 16)) state = STATE_EDIT_PRODUCTS;
+
+                DrawTextScaled("Edit Product", centerX - MeasureTextScaled("Edit Product", 28)/2, RY(0.05f), 28, colors.primary);
+
+                // Form fields (populate from products[editProductIndex])
+                static std::string editName, editPrice, editSize; static int editCategory = 0; static bool populated = false;
+                static std::string editDescription = "";
+                if (!populated) {
+                    const auto &p = products[editProductIndex];
+                    editName = p.name;
+                    if (p.hasPrice) { std::ostringstream ss; ss << std::fixed << std::setprecision(2) << p.price; editPrice = ss.str(); } else editPrice.clear();
+                    editSize = p.size;
+                    std::string s = p.sex; std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+                    if (s == "m") editCategory = 1; else if (s == "w") editCategory = 2; else if (s == "k") editCategory = 3; else if (s == "b") editCategory = 4; else editCategory = 0;
+                    editDescription = p.description;
+                    populated = true;
+                }
+
+                // Layout like Add Product (simplified)
+                float topY = RY(0.15f);
+                float labelX = RX(0.12f);
+                float inputX = RX(0.30f);
+                float fullW = RW(0.58f);
+                float inputH = RH(0.06f);
+                float gapV = RH(0.035f);
+
+                Rectangle nameRect = { inputX, topY, fullW, inputH };
+                Rectangle priceRect = { inputX, nameRect.y + inputH + gapV, fullW * 0.4f, inputH };
+                float catX = priceRect.x + priceRect.width + RW(0.02f);
+                float catBtnW = RW(0.06f), catBtnH = inputH * 0.9f, catGap = RW(0.015f);
+                Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
+
+                DrawTextScaled("Name:", labelX, (int)nameRect.y + 6, 20, colors.text);
+                DrawRectangleRec(nameRect, colors.inputBg);
+                DrawTextScaled(editName.c_str(), (int)nameRect.x + 8, (int)nameRect.y + 6, 18, colors.text);
+
+                DrawTextScaled("Price:", labelX, (int)priceRect.y + 6, 20, colors.text);
+                DrawRectangleRec(priceRect, colors.inputBg);
+                DrawTextScaled(editPrice.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
+
+                const std::vector<std::string> catLabels = {"M","W","K","B"};
+                for (size_t ci = 0; ci < catLabels.size(); ++ci) {
+                    Rectangle cb = { catX + ci * (catBtnW + catGap), priceRect.y + (priceRect.height - catBtnH)/2.0f, catBtnW, catBtnH };
+                    if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) editCategory = (int)ci + 1;
+                    if (editCategory == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
+                }
+
+                DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
+                static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
+                float sbtnW = RW(0.09f), sbtnH = inputH * 0.9f, sGap = RW(0.02f);
+                float totalS = sbtnW * (float)sizeOptions.size() + sGap * ((float)sizeOptions.size() - 1.0f);
+                float startSx = inputX + (fullW - totalS) / 2.0f;
+                float sBtnsY = sizeAreaRect.y + (sizeAreaRect.height - sbtnH) / 2.0f;
+                for (size_t si = 0; si < sizeOptions.size(); ++si) {
+                    Rectangle sb = { startSx + si * (sbtnW + sGap), sBtnsY, sbtnW, sbtnH };
+                    if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) { editSize = sizeOptions[si]; }
+                    if (!editSize.empty() && editSize == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, colors.accent);
+                }
+
+                // Action buttons layout (compute early so description rect can be placed relative to them)
+                float actionY = sizeAreaRect.y + inputH + gapV;
+                float actionW = RW(0.22f), actionH = RH(0.08f), actionGap = RW(0.04f);
+                float totalActionW = actionW * 2 + actionGap;
+                float actionStartX = centerX - totalActionW / 2.0f;
+                Rectangle btnUpdate = { actionStartX, actionY, actionW, actionH };
+                Rectangle btnCancel = { actionStartX + actionW + actionGap, actionY, actionW, actionH };
+
+                // Description rectangle computed now so click handling can reference it
+                float descY = actionY + actionH + (float)RH(0.02f);
+                float descH = (float)RH(0.18f);
+                Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH;
+
+                // Click-to-focus and keyboard input for Name/Price/Description fields
+                static int editFieldFocus = 0; // 0=name, 1=price, 2=none
+                static bool descFocus = false;
+                Vector2 mousePos = GetMousePosition();
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    if (CheckCollisionPointRec(mousePos, nameRect)) { editFieldFocus = 0; descFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, priceRect)) { editFieldFocus = 1; descFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, descRect)) { descFocus = true; editFieldFocus = 2; }
+                    else { editFieldFocus = 2; descFocus = false; }
+                }
+                // draw focus indicators
+                if (editFieldFocus == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
+                if (editFieldFocus == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
+                // (desc focus border will be drawn after the description area is rendered so it is visible)
+
+                // Text input handling routed by focus
+                int ch = GetCharPressed();
+                while (ch > 0) {
+                    if (ch >= 32 && ch <= 125) {
+                        if (descFocus && editDescription.size() < 2048) editDescription.push_back((char)ch);
+                        else if (!descFocus && editFieldFocus == 0 && editName.size() < 200) editName.push_back((char)ch);
+                        else if (!descFocus && editFieldFocus == 1 && editPrice.size() < 64) editPrice.push_back((char)ch);
+                    }
+                    ch = GetCharPressed();
+                }
+                if (IsKeyPressed(KEY_BACKSPACE)) {
+                    if (descFocus && !editDescription.empty()) editDescription.pop_back();
+                    else if (!descFocus && editFieldFocus == 0 && !editName.empty()) editName.pop_back();
+                    else if (!descFocus && editFieldFocus == 1 && !editPrice.empty()) editPrice.pop_back();
+                }
+                if (IsKeyPressed(KEY_TAB)) {
+                    if (!descFocus) {
+                        if (editFieldFocus == 0) editFieldFocus = 1; else editFieldFocus = 0;
+                    }
+                }
+
+                if (DrawButton(btnUpdate, "Update", colors.primary, colors, 20)) {
+                    // write update by index
+                    std::ifstream ifs("data/products.txt");
+                    if (!ifs) { /* fail */ }
+                    else {
+                        std::vector<std::string> lines; std::string line;
+                        while (std::getline(ifs, line)) lines.push_back(line);
+                        ifs.close();
+                        if (editProductIndex >= 0 && editProductIndex < (int)lines.size()) {
+                            std::string sizeToken = editSize;
+                            std::string sexToken;
+                            if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
+                            // include description field (use outer editDescription)
+                            std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
+                            lines[editProductIndex] = newline.str();
+                            std::ofstream ofs("data/products.txt", std::ios::trunc);
+                            if (ofs) { for (auto &l : lines) ofs << l << "\n"; ofs.close(); productsLoaded = false; needsResort = true; std::string editMsg = "Product updated"; state = STATE_EDIT_PRODUCTS; populated = false; }
+                        }
+                    }
+                }
+                if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) { state = STATE_EDIT_PRODUCTS; populated = false; }
+
+                // Description textarea below action buttons (draw using descRect defined above)
+                DrawTextScaled("Description:", labelX, (int)descRect.y - 18, 18, colors.text);
+                DrawRectangleRec(descRect, colors.inputBg);
+                // show text (simple multi-line naive wrap)
+                int lineY = (int)descRect.y + 6;
+                std::istringstream iss(editDescription);
+                std::string tokenLine;
+                while (std::getline(iss, tokenLine)) {
+                    DrawTextScaled(tokenLine.c_str(), (int)descRect.x + 6, lineY, 16, colors.text);
+                    lineY += 20;
+                }
+
+                // Debug overlay: show focus and input state to help diagnose why typing may not register
+                {
+                    bool mouseInDesc = CheckCollisionPointRec(mousePos, descRect);
+                    std::ostringstream dbg; dbg << "descFocus=" << (descFocus?"1":"0") << " editFieldFocus=" << editFieldFocus << " descLen=" << editDescription.size() << " mouseInDesc=" << (mouseInDesc?"1":"0");
+                    DrawTextScaled(dbg.str().c_str(), (int)inputX, (int)(descRect.y + descRect.height + 8), 14, colors.accent);
+                }
+
+                // Draw focus border for description (after the rect/content so it remains visible)
+                if (descFocus) DrawRectangleLinesEx(descRect, 2, colors.accent);
+
+                // (input handled above routed by focus)
             }
         }
          else if (state == STATE_OPTIONS) {
