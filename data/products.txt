@@ -1,11 +1,8 @@
-Socks;3.10;S;;W;
 Jeans;39.50;L;;W;
 Hat;7.25;OneSize;;M;
-Socks;3.10;S;;K;
 Jacket;59.99;XL;;W;
 Macacao;34.37;M;;B;
 boxers_batman;99.44;M;;M;
 meias do spongebob;9.99;XXS;;K;
 botas vermelhas;67.32;M;;W;
 adbnuj;19;S;;M;
-Socks;3.10;S;;M;
