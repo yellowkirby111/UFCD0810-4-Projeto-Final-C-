@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -429,6 +429,42 @@ int main() {
         return true;
     };
 
+    // Per-user cart persistence: file per user at data/cart_<username>.txt
+    auto CartFilename = [&](const std::string &user)->std::string {
+        std::string fn = "data/cart_" + user + ".txt";
+        return fn;
+    };
+
+    auto LoadCart = [&](const std::string &user) {
+        std::vector<std::pair<std::string,int>> cart;
+        if (user.empty()) return cart;
+        std::ifstream ifs(CartFilename(user));
+        if (!ifs) return cart;
+        std::string line;
+        while (std::getline(ifs, line)) {
+            if (line.empty()) continue;
+            size_t p = line.find(';');
+            std::string name = line.substr(0, p);
+            int qty = 1;
+            if (p != std::string::npos) {
+                try { qty = std::stoi(line.substr(p+1)); } catch(...) { qty = 1; }
+            }
+            cart.push_back({name, qty});
+        }
+        return cart;
+    };
+
+    auto SaveCart = [&](const std::string &user, const std::vector<std::pair<std::string,int>> &cart)->bool {
+        if (user.empty()) return false;
+        std::ofstream ofs(CartFilename(user), std::ios::trunc);
+        if (!ofs) return false;
+        for (const auto &it : cart) ofs << it.first << ";" << it.second << "\n";
+        return true;
+    };
+
+    // In-memory cart for currently logged user
+    std::vector<std::pair<std::string,int>> currentCart;
+
     // Add this near the top of main(), after InitWindow:
     Texture2D logo = LoadTexture("assets/logo.png");
 
@@ -521,6 +557,8 @@ int main() {
                     currentUser = su;
                     isAdmin = (currentUser == "admin");
                     loginFailed = false;
+                    // load user's cart
+                    currentCart = LoadCart(currentUser);
                     state = STATE_MENU;
                     // clear sensitive buffer if you want:
                     // memset(password, 0, sizeof(password));
@@ -739,9 +777,16 @@ int main() {
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)RY(0.45f), (float)RW(0.25f), (float)RH(0.1f) };
              if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_CATALOG;
 
+            // Cart button (visible when logged in)
+            if (!currentUser.empty()) {
+                Rectangle btnCart = { (float)(centerX - RW(0.125f)), (float)RY(0.62f), (float)RW(0.25f), (float)RH(0.1f) };
+                if (DrawButton(btnCart, "Cart", colors.buttonBg, colors, 28)) state = STATE_CART;
+            }
+
             // Only show Add Product button if admin
             if (isAdmin) {
-                Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)RY(0.62f), (float)RW(0.25f), (float)RH(0.1f) };
+                // Place Add Product below Cart for admins
+                Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)RY(0.74f), (float)RW(0.25f), (float)RH(0.1f) };
                 if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 28)) state = STATE_ADD_PRODUCT;
                 
                 // Move selector highlight based on menu index
@@ -892,6 +937,19 @@ int main() {
                     if (!lineBuf.empty()) DrawTextScaled(lineBuf.c_str(), (int)modal.x + 20, descY, 18, colors.text);
                     Rectangle closeBtn; closeBtn.x = (float)(modal.x + modal.width - (float)RW(0.12f)); closeBtn.y = (float)(modal.y + modal.height - (float)RH(0.08f)); closeBtn.width = (float)RW(0.12f); closeBtn.height = (float)RH(0.08f);
                     if (DrawButton(closeBtn, "Close", colors.buttonBg, colors, 16)) viewDescriptionIndex = -1;
+                    // Add to cart button (logged-in users)
+                    if (!currentUser.empty()) {
+                        Rectangle addCartBtn = { modal.x + 20.0f, modal.y + modal.height - (float)RH(0.08f), (float)RW(0.22f), (float)RH(0.08f) };
+                        if (DrawButton(addCartBtn, "Add to Cart", colors.primary, colors, 16)) {
+                            // add or increment
+                            bool found = false;
+                            for (auto &it : currentCart) {
+                                if (it.first == p.name) { it.second += 1; found = true; break; }
+                            }
+                            if (!found) currentCart.push_back({p.name, 1});
+                            SaveCart(currentUser, currentCart);
+                        }
+                    }
                 }
             }
         }
@@ -1108,6 +1166,57 @@ int main() {
 
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) state = STATE_MENU;
                 if (!msg.empty()) DrawTextScaled(msg.c_str(), centerX - MeasureTextScaled(msg.c_str(), 18)/2, RY(0.86f), 18, colors.accent);
+            }
+        }
+        else if (state == STATE_CART) {
+            // Ensure products loaded for price lookup
+            if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); needsResort = true; }
+
+            // Back button
+            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+
+            DrawTextScaled("My Cart", centerX - MeasureTextScaled("My Cart", 36)/2, RY(0.08f), 36, colors.primary);
+
+            if (currentUser.empty()) {
+                DrawTextScaled("Please login to view your cart.", centerX - MeasureTextScaled("Please login to view your cart.", 18)/2, RY(0.25f), 18, colors.accent);
+            } else {
+                float listX = RX(0.08f);
+                float listW = RW(0.84f);
+                float y = RY(0.16f);
+                float rowH = RH(0.06f);
+                double total = 0.0;
+                for (size_t i = 0; i < currentCart.size(); ++i) {
+                    const auto &it = currentCart[i];
+                    // find product price
+                    double price = 0.0; bool hasPrice = false;
+                    for (const auto &prod : products) { if (prod.name == it.first) { price = prod.price; hasPrice = prod.hasPrice; break; } }
+                    std::ostringstream label; label << it.first << "  x" << it.second;
+                    if (hasPrice) { label << " - $" << std::fixed << std::setprecision(2) << price << " ea"; total += price * it.second; }
+                    DrawTextScaled(label.str().c_str(), (int)listX, (int)y + 6, 18, colors.text);
+
+                    Rectangle minusBtn = { (float)(listX + listW - RW(0.28f)), y + rowH*0.1f, (float)RW(0.08f), (float)rowH*0.8f };
+                    Rectangle plusBtn = { (float)(listX + listW - RW(0.18f)), y + rowH*0.1f, (float)RW(0.08f), (float)rowH*0.8f };
+                    Rectangle remBtn = { (float)(listX + listW - RW(0.09f)), y + rowH*0.1f, (float)RW(0.08f), (float)rowH*0.8f };
+                    if (DrawButton(minusBtn, "-", colors.buttonBg, colors, 18)) {
+                        if (currentCart[i].second > 1) currentCart[i].second -= 1; else { currentCart.erase(currentCart.begin() + i); }
+                        SaveCart(currentUser, currentCart);
+                    }
+                    if (DrawButton(plusBtn, "+", colors.buttonBg, colors, 18)) { currentCart[i].second += 1; SaveCart(currentUser, currentCart); }
+                    if (DrawButton(remBtn, "Remove", (Color){220,80,80,255}, colors, 14)) { currentCart.erase(currentCart.begin() + i); SaveCart(currentUser, currentCart); }
+
+                    y += rowH + RH(0.01f);
+                }
+
+                // Total and Checkout
+                std::ostringstream tot; tot << "Total: $" << std::fixed << std::setprecision(2) << total;
+                DrawTextScaled(tot.str().c_str(), centerX - MeasureTextScaled(tot.str().c_str(), 20)/2, RY(0.78f), 20, colors.primary);
+
+                Rectangle checkoutBtn = { (float)(centerX - RW(0.22f)/2.0f), (float)RY(0.84f), (float)RW(0.22f), (float)RH(0.08f) };
+                if (DrawButton(checkoutBtn, "Checkout", colors.primary, colors, 20)) {
+                    // simple checkout: clear cart and save
+                    currentCart.clear(); SaveCart(currentUser, currentCart);
+                }
             }
         }
         else if (state == STATE_EDIT_PRODUCTS) {
