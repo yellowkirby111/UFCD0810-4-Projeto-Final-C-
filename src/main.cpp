@@ -1177,6 +1177,7 @@ int main() {
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
 
+            std::string totStr = "";
             if (currentUser.empty()) {
                 // draw empty state lower to avoid overlapping header
                 DrawTextScaled("Please login to view your cart.", centerX - MeasureTextScaled("Please login to view your cart.", 18)/2, RY(0.30f), 18, colors.accent);
@@ -1257,23 +1258,28 @@ int main() {
                         y += rowH + gap;
                     }
 
-                    // Totals box (fixed bottom right)
+                    // Compute totals string and defer drawing the totals box until after other UI so it isn't overlapped
                     std::ostringstream tot; tot << "Total: $" << std::fixed << std::setprecision(2) << total;
-                    std::string totStr = tot.str();
-                    Rectangle totBox = { (float)(centerX + RW(0.10f)), (float)RY(0.70f), (float)RW(0.34f), (float)RH(0.18f) };
-                    DrawRectangleRec(totBox, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(totBox, 2, colors.primary);
-                    DrawTextScaled(totStr.c_str(), (int)(totBox.x + 12), (int)(totBox.y + 12), 20, colors.primary);
-
-                    // Checkout and Clear buttons
-                    Rectangle checkoutBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f) - 8, totBox.width - 24, RH(0.06f) };
-                    if (DrawButton(checkoutBtn, "Checkout", colors.primary, colors, 20)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
-                    Rectangle clearBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f)*2 - 16, totBox.width - 24, RH(0.06f) };
-                    if (DrawButton(clearBtn, "Clear Cart", (Color){200,70,70,255}, colors, 16)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+                    totStr = tot.str();
+                    // store totStr in a local variable; drawing will happen after main content so it stays on top
                 }
             }
 
             // Draw header last so it appears on top of cards
             DrawTextScaled("My Cart", centerX - MeasureTextScaled("My Cart", 36)/2, RY(0.08f), 36, colors.primary);
+
+            // Draw totals box after everything else so it remains on top and not overlapped
+            {
+                Rectangle totBox = { (float)(centerX + RW(0.10f)), (float)RY(0.70f), (float)RW(0.34f), (float)RH(0.18f) };
+                DrawRectangleRec(totBox, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(totBox, 2, colors.primary);
+                DrawTextScaled(totStr.c_str(), (int)(totBox.x + 12), (int)(totBox.y + 12), 20, colors.primary);
+
+                // Checkout and Clear buttons inside the totals box
+                Rectangle checkoutBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f) - 8, totBox.width - 24, RH(0.06f) };
+                if (DrawButton(checkoutBtn, "Checkout", colors.primary, colors, 20)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+                Rectangle clearBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f)*2 - 16, totBox.width - 24, RH(0.06f) };
+                if (DrawButton(clearBtn, "Clear Cart", (Color){200,70,70,255}, colors, 16)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+            }
         }
         else if (state == STATE_EDIT_PRODUCTS) {
             // Ensure products loaded
