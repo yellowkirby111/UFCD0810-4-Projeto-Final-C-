@@ -1346,6 +1346,7 @@ int main() {
                 // Form fields (populate from products[editProductIndex])
                 static std::string editName, editPrice, editSize; static int editCategory = 0; static bool populated = false;
                 static std::string editDescription = "";
+                static std::string origEditName = ""; // store original name to replace correct file line
                 if (editProductPopulateNeeded || !populated) {
                     const auto &p = products[editProductIndex];
                     editName = p.name;
@@ -1354,6 +1355,7 @@ int main() {
                     std::string s = p.sex; std::transform(s.begin(), s.end(), s.begin(), ::tolower);
                     if (s == "m") editCategory = 1; else if (s == "w") editCategory = 2; else if (s == "k") editCategory = 3; else if (s == "b") editCategory = 4; else editCategory = 0;
                     editDescription = p.description;
+                    origEditName = p.name;
                     populated = true;
                     editProductPopulateNeeded = false;
                 }
@@ -1460,22 +1462,42 @@ int main() {
                 Rectangle btnCancel = { actionStartX + (actionW + actionGap) * 2, actionY, actionW, actionH };
 
                 if (DrawButton(btnUpdate, "Update", colors.primary, colors, 20)) {
-                    // write update by index
+                    // write update by finding the original product line by name and replacing it
                     std::ifstream ifs("data/products.txt");
                     if (!ifs) { /* fail */ }
                     else {
                         std::vector<std::string> lines; std::string line;
                         while (std::getline(ifs, line)) lines.push_back(line);
                         ifs.close();
-                        if (editProductIndex >= 0 && editProductIndex < (int)lines.size()) {
-                            std::string sizeToken = editSize;
-                            std::string sexToken;
-                            if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
-                            // include description field (use outer editDescription)
-                            std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
-                            lines[editProductIndex] = newline.str();
+
+                        std::string sizeToken = editSize;
+                        std::string sexToken;
+                        if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
+                        std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
+                        std::string newLine = newline.str();
+
+                        bool replaced = false;
+                        // Prefer matching by original product name
+                        for (size_t li = 0; li < lines.size(); ++li) {
+                            std::string l = lines[li];
+                            size_t psep = l.find(';');
+                            std::string lineName = (psep==std::string::npos) ? l : l.substr(0, psep);
+                            if (!origEditName.empty() && lineName == origEditName) {
+                                lines[li] = newLine; replaced = true; break;
+                            }
+                        }
+                        // Fallback: use index if not found
+                        if (!replaced && editProductIndex >= 0 && editProductIndex < (int)lines.size()) {
+                            lines[editProductIndex] = newLine; replaced = true;
+                        }
+
+                        if (replaced) {
                             std::ofstream ofs("data/products.txt", std::ios::trunc);
-                            if (ofs) { for (auto &l : lines) ofs << l << "\n"; ofs.close(); productsLoaded = false; needsResort = true; std::string editMsg = "Product updated"; state = STATE_EDIT_PRODUCTS; populated = false; }
+                            if (ofs) {
+                                for (auto &l : lines) ofs << l << "\n";
+                                ofs.close();
+                                productsLoaded = false; needsResort = true; state = STATE_EDIT_PRODUCTS; populated = false;
+                            }
                         }
                     }
                 }

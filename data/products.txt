@@ -1,5 +1,5 @@
 Hats;7.25;OneSize;;M;
-Hat;7.25;OneSize;;M;
+Hatss;7.25;OneSize;;M;
 Jacket;59.99;XL;;W;
 Macacao;34.37;M;;B;
 boxers_batman;99.44;M;;M;
