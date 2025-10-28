@@ -1,4 +1,4 @@
-Jeans;39.50;L;;W;
+Hats;7.25;OneSize;;M;
 Hat;7.25;OneSize;;M;
 Jacket;59.99;XL;;W;
 Macacao;34.37;M;;B;
