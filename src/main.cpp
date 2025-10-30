@@ -1782,26 +1782,30 @@ int main() {
 
             // Edit modal / inline area at bottom
             if (editingUser && editUserIndex >= 0 && editUserIndex < (int)users.size()) {
-                float modalW = RW(0.72f);
-                float modalH = RH(0.28f);
-                // Center the modal inside the visible users area to avoid overlap on tall/fullscreen displays
-                Rectangle modal; modal.x = centerX - modalW/2.0f; modal.y = startY + (visibleH - modalH) / 2.0f; modal.width = modalW; modal.height = modalH;
+                // Adjust modal sizing/spacing depending on window mode to improve layout in small window vs windowed-fullscreen
+                float modalW = (currentWindowMode == WM_WINDOWED) ? RW(0.64f) : RW(0.72f);
+                float modalH = (currentWindowMode == WM_WINDOWED) ? RH(0.32f) : RH(0.28f);
+                // extra vertical offset: give more breathing room in windowed-fullscreen
+                float extraV = (currentWindowMode == WM_WINDOWED_FULLSCREEN) ? RH(0.03f) : 0.0f;
+                Rectangle modal; modal.x = centerX - modalW/2.0f; modal.y = startY + (visibleH - modalH) / 2.0f + extraV; modal.width = modalW; modal.height = modalH;
                 DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(modal, 2, colors.accent);
                 DrawTextScaled("Edit User", (int)modal.x + 12, (int)modal.y + 8, 20, colors.primary);
 
-                // Username (readonly)
-                std::string uname = users[editUserIndex].name;
-                DrawTextScaled("Username:", (int)modal.x + 12, (int)modal.y + 40, 18, colors.text);
-                DrawTextScaled(uname.c_str(), (int)modal.x + 130, (int)modal.y + 40, 18, colors.text);
+                // Username (readonly) with responsive label placement
+                float labelX = modal.x + 12;
+                float valueX = modal.x + 130;
+                // Adjusted username display with better vertical spacing
+                float labelTopMargin = RH(0.04f); // 4% of screen height margin
+                float labelY = modal.y + labelTopMargin;
+                DrawTextScaled("Username:", (int)labelX, (int)labelY, 20, colors.text);
+                if (currentWindowMode == WM_FULLSCREEN || currentWindowMode == WM_WINDOWED_FULLSCREEN)
+                    DrawTextScaled(users[editUserIndex].name.c_str(), (int)(valueX+ 75), (int)labelY, 20, colors.text);
+                else
+                    DrawTextScaled(users[editUserIndex].name.c_str(), (int)(valueX ), (int)labelY, 20, colors.text);
 
-                // Password input (masked — no reveal button: passwords must remain hidden)
-                DrawTextScaled("Password:", (int)modal.x + 12, (int)modal.y + 72, 18, colors.text);
+
                 Rectangle passRect = { modal.x + 130, modal.y + 68, modal.width - 150, RH(0.06f) };
-                DrawRectangleRec(passRect, colors.inputBg);
 
-                // Always display masked password (asterisks). Admin cannot reveal stored passwords.
-                std::string passDisplay = editUserNewPass.empty() ? "(no change)" : std::string(editUserNewPass.size(), '*');
-                DrawTextScaled(passDisplay.c_str(), (int)passRect.x + 6, (int)passRect.y + 6, 18, colors.text);
 
                 // persistent focus flag for password input (declare before use)
                 static bool userPassFocus = false;
@@ -1857,10 +1861,6 @@ int main() {
                 }
                 if (IsKeyPressed(KEY_BACKSPACE) && !editUserNewPass.empty() && editUserCanChangePassword) editUserNewPass.pop_back();
 
-                // If admin is editing another user, show a small explanatory message
-                if (!editUserCanChangePassword) {
-                    DrawTextScaled("Admins cannot change other users' passwords.", (int)(passRect.x), (int)(passRect.y + passRect.height + 6), 14, ORANGE);
-                }
 
                 // Save / Cancel
                 Rectangle saveBtn = { modal.x + 12, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 18, RH(0.06f) };
