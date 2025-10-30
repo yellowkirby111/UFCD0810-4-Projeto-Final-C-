@@ -8,3 +8,4 @@ adbnuj;19;S;;M;
 casaco verdre;35.99;S;;K;0;
 boxers_batman;99.44;M;;M;99;
 adbnuj;19.00;S;;M;50;
+botas_azuis;39;XS;;B;0;
