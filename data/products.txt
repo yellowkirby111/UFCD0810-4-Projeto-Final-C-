@@ -1,5 +1,5 @@
-Hats;7.25;OneSize;;M;
-Hatss;7.25;OneSize;;M;
+Jeans;39.50;L;;W;
+meias do spongebob;9.99;XXS;;K;0;
 Jacket;59.99;XL;;W;
 Macacao;34.37;M;;B;
 boxers_batman;99.44;M;;M;
@@ -7,3 +7,4 @@ meias do spongebob;9.99;XXS;;K;
 botas vermelhas;67.32;M;;W;
 adbnuj;19;S;;M;
 casaco verdre;35.99;S;;K;
+boxers_batman;99.44;M;;M;99;

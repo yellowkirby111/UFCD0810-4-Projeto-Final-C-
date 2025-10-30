@@ -237,7 +237,7 @@ int main() {
     std::string regMessage = "";
 
     // Products storage
-    struct Product { std::string name; double price; bool hasPrice; std::string size; std::string fabric; std::string sex; std::string description; };
+    struct Product { std::string name; double price; bool hasPrice; double salePercent; bool hasSale; std::string size; std::string fabric; std::string sex; std::string description; int fileIndex; };
     std::vector<Product> products;
     std::vector<Product> filteredProducts; // For search/sort results
     bool productsLoaded = false;
@@ -257,6 +257,7 @@ int main() {
         std::ifstream ifs(path);
         if (!ifs) return false;
         std::string line;
+        int lineIndex = 0;
         while (std::getline(ifs, line)) {
             if (line.empty()) continue;
             // Split by ';' into tokens: name;price;size;description (description optional, may contain semicolons)
@@ -277,13 +278,30 @@ int main() {
             std::string fabricStr;
             std::string sexStr;
             std::string descStr;
+            double salePercent = 0.0;
+            bool hasSale = false;
             // Support both old and new formats. Preferred new format:
             // name;price;size;fabric;sex;description (description may contain ';')
-            if (tokens.size() >= 6) {
+            if (tokens.size() >= 7) {
                 fabricStr = tokens[3];
                 sexStr = tokens[4];
-                descStr = tokens[5];
-                for (size_t i = 6; i < tokens.size(); ++i) descStr += ";" + tokens[i];
+                std::string saleStr = tokens[5];
+                descStr = tokens[6];
+                for (size_t i = 7; i < tokens.size(); ++i) descStr += ";" + tokens[i];
+                try { salePercent = std::stod(saleStr); hasSale = true; } catch(...) { hasSale = false; salePercent = 0.0; }
+            } else if (tokens.size() == 6) {
+                // ambiguous: token[5] might be sale or description. Detect numeric -> sale, otherwise description
+                fabricStr = tokens[3];
+                sexStr = tokens[4];
+                std::string t5 = tokens[5];
+                bool looksNumeric = !t5.empty();
+                for (char c : t5) if (!(isdigit((unsigned char)c) || c=='.' || c=='-' )) { looksNumeric = false; break; }
+                if (looksNumeric) {
+                    try { salePercent = std::stod(t5); hasSale = true; } catch(...) { hasSale = false; salePercent = 0.0; }
+                    descStr.clear();
+                } else {
+                    descStr = t5;
+                }
             } else if (tokens.size() == 5) {
                 // name;price;size;fabric;description  (no sex provided)
                 fabricStr = tokens[3];
@@ -304,7 +322,8 @@ int main() {
                     ok = true;
                 } catch (...) { ok = false; }
             }
-            products.push_back({ name, price, ok, sizeStr, fabricStr, sexStr, descStr });
+            products.push_back({ name, price, ok, salePercent, hasSale, sizeStr, fabricStr, sexStr, descStr, lineIndex });
+            ++lineIndex;
         }
 
         // Sort products: priced items first (ascending by price), then unpriced items
@@ -935,11 +954,39 @@ int main() {
                     float y = startY + i * rowH + productsScroll;
                     if (y < RY(0.20f) - rowH || y > sh) continue;
                     const auto &p = filteredProducts[i];
-                    std::string line = p.name;
-                    if (p.hasPrice) { std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << " - $" << p.price; line += ss.str(); }
-                    if (!p.size.empty()) { line += " (Size: " + p.size + ")"; }
-                    DrawTextScaled(line.c_str(), RX(0.03f), (int)y, 20, colors.text);
+                    // Draw name
+                    DrawTextScaled(p.name.c_str(), RX(0.03f), (int)y, 20, colors.text);
+                    
+                    // Price column starts after name
+                    float priceX = RX(0.03f) + RW(0.25f);
+                    if (p.hasPrice) {
+                        if (p.hasSale) {
+                            // Original price struck-through
+                            std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << "$" << p.price;
+                            std::string orig = ss.str();
+                            int origW = MeasureTextScaled(orig.c_str(), 18);
+                            Color faded = Fade(colors.text, 0.6f);
+                            DrawTextScaled(orig.c_str(), (int)priceX, (int)y, 18, faded);
+                            float lineY = (float)y + ScaledFontSize(18) * 0.5f;
+                            DrawLineEx(Vector2{ priceX, lineY }, Vector2{ priceX + origW, lineY }, 2.0f, colors.text);
+                            
+                            // Sale price right after
+                            double salePrice = p.price * (1.0 - p.salePercent/100.0);
+                            std::ostringstream sps; sps.setf(std::ios::fixed); sps.precision(2); sps << "$" << salePrice;
+                            DrawTextScaled(sps.str().c_str(), (int)(priceX + origW + RW(0.01f)), (int)y, 18, colors.primary);
+                        } else {
+                            std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << "$" << p.price;
+                            DrawTextScaled(ss.str().c_str(), (int)priceX, (int)y, 18, colors.text);
+                        }
+                    }
 
+                    // Size column starts after price
+                    float sizeX = RX(0.45f); // Adjust this value to position size column
+                    if (!p.size.empty()) {
+                        DrawTextScaled(p.size.c_str(), (int)sizeX, (int)y, 16, Fade(colors.text, 0.8f));
+                    }
+
+                    // View button stays on the right
                     Rectangle viewBtn = { (float)(sw - RW(0.18f)), y - rowH*0.15f, (float)RW(0.14f), (float)(rowH*0.85f) };
                     if (DrawButton(viewBtn, "View", colors.buttonBg, colors, 14)) viewDescriptionIndex = (int)i;
                 }
@@ -1011,8 +1058,8 @@ int main() {
                 if (DrawButton(btnToLogin, "Go to Login", colors.buttonBg, colors, 20)) { memset(username,0,sizeof(username)); memset(password,0,sizeof(password)); state = STATE_LOGIN; }
             } else {
                 // Responsive, centered Add Product form
-                static std::string nameInput, priceInput, sizeInput, removeInput, msg;
-                static int activeFieldAdd = 0; // 0=name,1=price,2=remove
+                static std::string nameInput, priceInput, sizeInput, removeInput, saleInput, msg;
+                static int activeFieldAdd = 0; // 0=name,1=price,2=remove,3=sale
                 static int editingIndex = -1; // index in products when editing, -1 = new
 
                 // Layout metrics
@@ -1031,7 +1078,8 @@ int main() {
                 float catBtnH = inputH * 0.9f;
                 float catGap = RW(0.015f);
                 // reserve remaining width for category buttons area (not used as a rect here)
-                Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
+                float extraVerticalOffset = RH(0.08f); // adjust this value to move further up/down
+                Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV + extraVerticalOffset, fullW, inputH };
                 float descY = sizeAreaRect.y + inputH + gapV * 1.2f;
                 float descH_add = (float)RH(0.18f);
                 Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH_add;
@@ -1046,6 +1094,13 @@ int main() {
                 DrawRectangleRec(priceRect, colors.inputBg);
                 DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
+
+                // Sale % field (below price)
+                Rectangle saleRect = { inputX, priceRect.y + priceRect.height + RH(0.02f), fullW * 0.2f, inputH };
+                DrawTextScaled("Sale %:", labelX, (int)saleRect.y + 6, 20, colors.text);
+                DrawRectangleRec(saleRect, colors.inputBg);
+                DrawTextScaled(saleInput.c_str(), (int)saleRect.x + 8, (int)saleRect.y + 6, 18, colors.text);
+                if (activeFieldAdd == 3) DrawRectangleLinesEx(saleRect, 2, colors.accent);
 
                 // Category selection (M/W/K/B) placed to the right of Price (label removed)
                 static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
@@ -1117,6 +1172,7 @@ int main() {
                     if (CheckCollisionPointRec(mouse, nameRect)) activeFieldAdd = 0;
                     else if (CheckCollisionPointRec(mouse, priceRect)) activeFieldAdd = 1;
                     else if (CheckCollisionPointRec(mouse, removeRect)) activeFieldAdd = 2;
+                    else if (CheckCollisionPointRec(mouse, saleRect)) activeFieldAdd = 3;
                     else activeFieldAdd = 0;
                 }
 
@@ -1127,6 +1183,7 @@ int main() {
                         if (activeFieldAdd == 0 && nameInput.size() < 200) nameInput.push_back((char)cp);
                         else if (activeFieldAdd == 1 && priceInput.size() < 64) priceInput.push_back((char)cp);
                         else if (activeFieldAdd == 2 && removeInput.size() < 200) removeInput.push_back((char)cp);
+                        else if (activeFieldAdd == 3 && saleInput.size() < 10) saleInput.push_back((char)cp);
                     }
                     cp = GetCharPressed();
                 }
@@ -1134,8 +1191,9 @@ int main() {
                     if (activeFieldAdd == 0 && !nameInput.empty()) nameInput.pop_back();
                     else if (activeFieldAdd == 1 && !priceInput.empty()) priceInput.pop_back();
                     else if (activeFieldAdd == 2 && !removeInput.empty()) removeInput.pop_back();
+                    else if (activeFieldAdd == 3 && !saleInput.empty()) saleInput.pop_back();
                 }
-                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 3;
+                if (IsKeyPressed(KEY_TAB)) activeFieldAdd = (activeFieldAdd + 1) % 4;
 
                 // Action buttons centered (Save, Cancel)
                 float actionY = sizeAreaRect.y + inputH + gapV;
@@ -1152,10 +1210,15 @@ int main() {
                         std::string trimmed = priceInput.substr(start);
                         if (!trimmed.empty()) { pr = std::stod(trimmed); ok = true; }
                     } catch(...) { ok = false; }
+                    double sp = 0.0; bool okSale = false;
+                    if (!saleInput.empty()) {
+                        try { sp = std::stod(saleInput); okSale = true; } catch(...) { okSale = false; }
+                        if (okSale) { if (sp < 0) sp = 0; if (sp > 100) sp = 100; }
+                    }
                     if (!ok) msg = "Invalid price";
                     else if (nameInput.empty()) msg = "Name required";
                     else {
-                        // Build the product line to write
+                        // Build the product line to write (include sale token)
                         std::string sizeToken = sizeInput.empty() ? std::string() : sizeInput;
                         std::string fabricToken = std::string();
                         std::string sexToken;
@@ -1166,18 +1229,21 @@ int main() {
                         else sexToken = std::string();
                         std::string descToken = std::string();
                         std::ostringstream newline;
-                        newline << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << descToken;
+                        // format: name;price;size;fabric;sex;sale;description
+                        newline << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string((int)sp) : "0") << ";" << descToken;
 
                         if (editingIndex >= 0) {
-                            // Load all lines, replace the matching product line by index, and rewrite file
+                            // update existing by index (same logic)...
                             std::ifstream ifs("data/products.txt");
                             if (!ifs) { msg = "Failed to open products file for update"; }
                             else {
                                 std::vector<std::string> lines; std::string line;
                                 while (std::getline(ifs, line)) lines.push_back(line);
                                 ifs.close();
-                                if (editingIndex < (int)lines.size()) {
-                                    lines[editingIndex] = newline.str();
+                                int fileIdx = -1;
+                                if (editingIndex >= 0 && editingIndex < (int)products.size()) fileIdx = products[editingIndex].fileIndex;
+                                if (fileIdx >= 0 && fileIdx < (int)lines.size()) {
+                                    lines[fileIdx] = newline.str();
                                     std::ofstream ofs("data/products.txt", std::ios::trunc);
                                     if (!ofs) { msg = "Failed to write products file"; }
                                     else {
@@ -1185,7 +1251,7 @@ int main() {
                                         ofs.close();
                                         msg = "Product updated";
                                         // reset form
-                                        nameInput.clear(); priceInput.clear(); sizeInput.clear(); selectedCategoryAdd = 0; editingIndex = -1; productsLoaded = false; needsResort = true;
+                                        nameInput.clear(); priceInput.clear(); sizeInput.clear(); saleInput.clear(); selectedCategoryAdd = 0; editingIndex = -1; productsLoaded = false; needsResort = true;
                                     }
                                 } else {
                                     msg = "Product index out of range";
@@ -1196,7 +1262,7 @@ int main() {
                             if (ofs) {
                                 ofs << newline.str() << "\n";
                                 ofs.close();
-                                msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); selectedCategoryAdd = 0; productsLoaded = false; needsResort = true;
+                                msg = "Product saved"; nameInput.clear(); priceInput.clear(); sizeInput.clear(); saleInput.clear(); selectedCategoryAdd = 0; productsLoaded = false; needsResort = true;
                             } else msg = "Failed to open file";
                         }
                     }
@@ -1261,7 +1327,22 @@ int main() {
 
                         // Price lookup
                         double price = 0.0; bool hasPrice = false;
-                        for (const auto &prod : products) { if (prod.name == it.first) { price = prod.price; hasPrice = prod.hasPrice; break; } }
+                        double originalPrice = 0.0;
+                        bool hasSaleLocal = false;
+                        double salePercentLocal = 0.0;
+                        for (const auto &prod : products) {
+                            if (prod.name == it.first) {
+                                originalPrice = prod.price;
+                                hasPrice = prod.hasPrice;
+                                hasSaleLocal = prod.hasSale;
+                                salePercentLocal = prod.salePercent;
+                                break;
+                            }
+                        }
+                        if (hasPrice) {
+                            if (hasSaleLocal) price = originalPrice * (1.0 - salePercentLocal/100.0);
+                            else price = originalPrice;
+                        } else price = 0.0;
                         std::ostringstream priceS; if (hasPrice) priceS << std::fixed << std::setprecision(2) << price; else priceS << "-";
                         std::string priceStr = priceS.str();
 
@@ -1278,7 +1359,22 @@ int main() {
                         if (DrawButton(plusBtn, "+", colors.buttonBg, colors, 18)) { currentCart[i].second += 1; SaveCart(currentUser, currentCart); }
 
                         // Price
-                        DrawTextScaled(priceStr.c_str(), (int)(card.x + colNameW + colQtyW + 8), (int)(card.y + 8), 18, colors.text);
+                        float px = card.x + colNameW + colQtyW + 8;
+                        if (hasPrice && hasSaleLocal) {
+                            // original struck-through
+                            std::ostringstream origs; origs.setf(std::ios::fixed); origs.precision(2); origs << "$" << originalPrice;
+                            std::string orig = origs.str();
+                            int origW = MeasureTextScaled(orig.c_str(), 16);
+                            DrawTextScaled(orig.c_str(), (int)px, (int)(card.y + 8), 16, Fade(colors.text, 0.6f));
+                            float lineY = card.y + 8 + ScaledFontSize(16) * 0.5f;
+                            DrawLineEx(Vector2{ px, lineY }, Vector2{ px + origW, lineY }, 2.0f, colors.text);
+                            // sale price after original (smaller gap)
+                            double salePrice = originalPrice * (1.0 - salePercentLocal/100.0);
+                            std::ostringstream sps; sps.setf(std::ios::fixed); sps.precision(2); sps << "$" << salePrice;
+                            DrawTextScaled(sps.str().c_str(), (int)(px + origW + RW(0.005f)), (int)(card.y + 8), 16, colors.primary);
+                        } else {
+                            DrawTextScaled(priceStr.c_str(), (int)px, (int)(card.y + 8), 18, colors.text);
+                        }
 
                         // Subtotal
                         double subtotal = hasPrice ? price * it.second : 0.0;
@@ -1389,12 +1485,16 @@ int main() {
                 if (editProductPopulateNeeded || !populated) {
                     const auto &p = products[editProductIndex];
                     editName = p.name;
-                    if (p.hasPrice) { std::ostringstream ss; ss << std::fixed << std::setprecision(2) << p.price; editPrice = ss.str(); } else editPrice.clear();
+                    if (p.hasPrice) { std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << p.price; editPrice = ss.str(); } else editPrice.clear();
                     editSize = p.size;
                     std::string s = p.sex; std::transform(s.begin(), s.end(), s.begin(), ::tolower);
                     if (s == "m") editCategory = 1; else if (s == "w") editCategory = 2; else if (s == "k") editCategory = 3; else if (s == "b") editCategory = 4; else editCategory = 0;
                     editDescription = p.description;
-                    origEditName = p.name;
+                    // sale populate
+                    if (p.hasSale) {
+                        std::ostringstream ssp; ssp << (int)p.salePercent;
+                        editSale = ssp.str();
+                    } else editSale.clear();
                     populated = true;
                     editProductPopulateNeeded = false;
                 }
@@ -1421,6 +1521,16 @@ int main() {
                 DrawRectangleRec(priceRect, colors.inputBg);
                 DrawTextScaled(editPrice.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
 
+                // Draw sale input near price
+                Rectangle saleRectEdit = { priceRect.x + priceRect.width + RW(0.02f), priceRect.y, RW(0.12f), priceRect.height };
+                DrawTextScaled("Sale%:", (int)(saleRectEdit.x - MeasureTextScaled("Sale%:", 18) - 6), (int)saleRectEdit.y + 6, 18, colors.text);
+                DrawRectangleRec(saleRectEdit, colors.inputBg);
+                DrawTextScaled(editSale.c_str(), (int)saleRectEdit.x + 6, (int)saleRectEdit.y + 6, 18, colors.text);
+                static bool saleFocus = false;
+                if (saleFocus) DrawRectangleLinesEx(saleRectEdit, 2, colors.accent);
+
+                // Category selection (M/W/K/B) placed to the right of Price (label removed)
+                static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
                 const std::vector<std::string> catLabels = {"M","W","K","B"};
                 for (size_t ci = 0; ci < catLabels.size(); ++ci) {
                     Rectangle cb = { catX + ci * (catBtnW + catGap), priceRect.y + (priceRect.height - catBtnH)/2.0f, catBtnW, catBtnH };
@@ -1428,6 +1538,7 @@ int main() {
                     if (editCategory == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
                 }
 
+                // Size selection — buttons centered inside sizeAreaRect
                 DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
                 float sbtnW = RW(0.09f), sbtnH = inputH * 0.9f, sGap = RW(0.02f);
@@ -1460,10 +1571,11 @@ int main() {
                 static bool descFocus = false;
                 Vector2 mousePos = GetMousePosition();
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-                    if (CheckCollisionPointRec(mousePos, nameRect)) { editFieldFocus = 0; descFocus = false; }
-                    else if (CheckCollisionPointRec(mousePos, priceRect)) { editFieldFocus = 1; descFocus = false; }
-                    else if (CheckCollisionPointRec(mousePos, descRect)) { descFocus = true; editFieldFocus = 2; }
-                    else { editFieldFocus = 2; descFocus = false; }
+                    if (CheckCollisionPointRec(mousePos, nameRect)) { editFieldFocus = 0; descFocus = false; saleFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, priceRect)) { editFieldFocus = 1; descFocus = false; saleFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, descRect)) { descFocus = true; editFieldFocus = 2; saleFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, saleRectEdit)) { saleFocus = true; editFieldFocus = 2; descFocus = false; }
+                    else { editFieldFocus = 2; descFocus = false; saleFocus = false; }
                 }
                 // draw focus indicators
                 if (editFieldFocus == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
@@ -1477,6 +1589,7 @@ int main() {
                         if (descFocus && editDescription.size() < 2048) editDescription.push_back((char)ch);
                         else if (!descFocus && editFieldFocus == 0 && editName.size() < 200) editName.push_back((char)ch);
                         else if (!descFocus && editFieldFocus == 1 && editPrice.size() < 64) editPrice.push_back((char)ch);
+                        else if (saleFocus && editSale.size() < 6) editSale.push_back((char)ch);
                     }
                     ch = GetCharPressed();
                 }
@@ -1484,6 +1597,7 @@ int main() {
                     if (descFocus && !editDescription.empty()) editDescription.pop_back();
                     else if (!descFocus && editFieldFocus == 0 && !editName.empty()) editName.pop_back();
                     else if (!descFocus && editFieldFocus == 1 && !editPrice.empty()) editPrice.pop_back();
+                    else if (saleFocus && !editSale.empty()) editSale.pop_back();
                 }
                 if (IsKeyPressed(KEY_TAB)) {
                     if (!descFocus) {
