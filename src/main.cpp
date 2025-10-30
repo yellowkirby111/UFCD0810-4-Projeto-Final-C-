@@ -1479,9 +1479,11 @@ int main() {
                 DrawTextScaled("Edit Product", centerX - MeasureTextScaled("Edit Product", 28)/2, RY(0.05f), 28, colors.primary);
 
                 // Form fields (populate from products[editProductIndex])
-                static std::string editName, editPrice, editSize; static int editCategory = 0; static bool populated = false;
+                static std::string editName, editPrice, editSize, editSale; // Added editSale here
+                static int editCategory = 0;
+                static bool populated = false;
                 static std::string editDescription = "";
-                static std::string origEditName = ""; // store original name to replace correct file line
+                static std::string origEditName = "";
                 if (editProductPopulateNeeded || !populated) {
                     const auto &p = products[editProductIndex];
                     editName = p.name;
