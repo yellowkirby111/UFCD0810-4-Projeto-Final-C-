@@ -1446,16 +1446,28 @@ int main() {
                         state = STATE_EDIT_PRODUCT;
                     }
                     if (DrawButton(removeBtn, "Remove", colors.buttonBg, colors, 14)) {
-                        // Remove product by index i from file and refresh
+                        // Remove product by name (safer when in-memory ordering differs from file order)
+                        const std::string targetName = p.name;
                         std::ifstream ifs("data/products.txt");
-                        if (!ifs) {
-                            // nothing to do
-                        } else {
+                        if (ifs) {
                             std::vector<std::string> lines; std::string line;
                             while (std::getline(ifs, line)) lines.push_back(line);
                             ifs.close();
-                            if (i < lines.size()) {
-                                lines.erase(lines.begin() + i);
+
+                            bool erased = false;
+                            for (auto it = lines.begin(); it != lines.end(); ++it) {
+                                std::string l = *it;
+                                if (l.empty()) continue;
+                                size_t psep = l.find(';');
+                                std::string lineName = (psep == std::string::npos) ? l : l.substr(0, psep);
+                                if (lineName == targetName) {
+                                    lines.erase(it);
+                                    erased = true;
+                                    break;
+                                }
+                            }
+
+                            if (erased) {
                                 std::ofstream ofs("data/products.txt", std::ios::trunc);
                                 if (ofs) {
                                     for (auto &l : lines) ofs << l << "\n";
@@ -1497,6 +1509,8 @@ int main() {
                         std::ostringstream ssp; ssp << (int)p.salePercent;
                         editSale = ssp.str();
                     } else editSale.clear();
+                    // remember original name for safer name-based replacement
+                    origEditName = p.name;
                     populated = true;
                     editProductPopulateNeeded = false;
                 }
@@ -1624,15 +1638,25 @@ int main() {
                         std::vector<std::string> lines; std::string line;
                         while (std::getline(ifs, line)) lines.push_back(line);
                         ifs.close();
+                        // parse sale percent (if provided)
+                        int salePercentVal = 0; bool okSale = false;
+                        if (!editSale.empty()) {
+                            try { salePercentVal = std::stoi(editSale); okSale = true; }
+                            catch(...) { okSale = false; salePercentVal = 0; }
+                        }
 
                         std::string sizeToken = editSize;
+                        std::string fabricToken = "";
                         std::string sexToken;
                         if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
-                        std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
+
+                        // Build new product line using canonical format: name;price;size;fabric;sex;sale;description
+                        std::ostringstream newline;
+                        newline << editName << ";" << editPrice << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string(salePercentVal) : "0") << ";" << editDescription;
                         std::string newLine = newline.str();
 
                         bool replaced = false;
-                        // Prefer matching by original product name
+                        // Replace the original product line with the updated one (match by original name, fallback to index).
                         for (size_t li = 0; li < lines.size(); ++li) {
                             std::string l = lines[li];
                             size_t psep = l.find(';');
