@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_USER_MANAGEMENT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -50,19 +50,42 @@ ColorScheme GetColorScheme(Theme theme) {
     }
 }
 
-// Function to load users from file
-std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& filename) {
-    std::vector<std::pair<std::string, std::string>> users;
+// User model (supports admin flag)
+struct User { std::string name; std::string pass; bool isAdmin; };
+
+// Function to load users from file. Format supported:
+// username:password[:admin]
+// where the optional third token equals "admin" to mark the account as admin.
+std::vector<User> LoadUsers(const std::string& filename) {
+    std::vector<User> users;
     std::ifstream file(filename);
     if (file.is_open()) {
         std::string line;
         while (std::getline(file, line)) {
-            size_t pos = line.find(':');
-            if (pos != std::string::npos) {
-                std::string username = line.substr(0, pos);
-                std::string password = line.substr(pos + 1);
-                users.push_back({username, password});
+            if (line.empty()) continue;
+            // split at ':' up to 3 tokens
+            std::vector<std::string> toks;
+            size_t start = 0;
+            while (true) {
+                size_t p = line.find(':', start);
+                if (p == std::string::npos) { toks.push_back(line.substr(start)); break; }
+                toks.push_back(line.substr(start, p - start)); start = p + 1;
+                if (toks.size() >= 2 && start >= line.size()) break;
             }
+            std::string username = toks.size() > 0 ? toks[0] : std::string();
+            std::string password = toks.size() > 1 ? toks[1] : std::string();
+            bool admin = false;
+            if (toks.size() > 2) {
+                std::string t = toks[2];
+                std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+                if (t == "admin" || t == "1" || t == "true") admin = true;
+            }
+            // Backwards compatibility: treat the account named "admin" as admin
+            // even if older users.txt files don't include the optional :admin token.
+            std::string userLower = username;
+            std::transform(userLower.begin(), userLower.end(), userLower.begin(), ::tolower);
+            if (!admin && userLower == "admin") admin = true;
+            if (!username.empty()) users.push_back({username, password, admin});
         }
         file.close();
     }
@@ -70,12 +93,9 @@ std::vector<std::pair<std::string, std::string>> LoadUsers(const std::string& fi
 }
 
 // Function to check login credentials
-bool CheckLogin(const std::vector<std::pair<std::string, std::string>>& users, 
-               const std::string& username, const std::string& password) {
+bool CheckLogin(const std::vector<User>& users, const std::string& username, const std::string& password) {
     for (const auto& user : users) {
-        if (user.first == username && user.second == password) {
-            return true;
-        }
+        if (user.name == username && user.pass == password) return true;
     }
     return false;
 }
@@ -165,20 +185,20 @@ int main() {
     ApplyWindowMode(currentWindowMode);
  
     // Try to load users from multiple possible locations
-    std::vector<std::pair<std::string, std::string>> users;
-    
+    std::vector<User> users;
+
     // Try current directory first
     users = LoadUsers("users.txt");
     if (users.empty()) {
         // Try src directory
         users = LoadUsers("src/users.txt");
     }
-    
+
     // If still no users found, use defaults
     if (users.empty()) {
         std::cout << "No users.txt file found. Using default users:" << std::endl;
-        users.push_back({"admin", "1234"});
-        users.push_back({"user", "password"});
+        users.push_back({"admin", "1234", true});
+        users.push_back({"user", "password", false});
         std::cout << "Default users: admin/1234 and user/password" << std::endl;
     }
 
@@ -186,7 +206,7 @@ int main() {
     std::cout << "\n=== LOADED USERS DEBUG ===" << std::endl;
     for (size_t i = 0; i < users.size(); ++i) {
         const auto& u = users[i];
-        std::cout << "User[" << i << "]: '" << u.first << "' / '" << u.second << "'" << std::endl;
+        std::cout << "User[" << i << "]: '" << u.name << "' / '" << u.pass << "' admin=" << (u.isAdmin?"1":"0") << std::endl;
     }
     std::cout << "===========================\n" << std::endl;
 
@@ -430,21 +450,34 @@ int main() {
     };
     
     auto SaveUser = [&](const std::string &username, const std::string &password) -> bool {
-        // Check if user already exists
+        // Check if user already exists (by name)
         for (const auto& user : users) {
-            if (user.first == username) {
+            if (user.name == username) {
                 return false; // User already exists
             }
         }
-        
-        // Append to users.txt file
+
+        // Append to users.txt file (new users are non-admin by default)
         std::ofstream ofs("users.txt", std::ios::app);
         if (!ofs) return false;
         ofs << username << ":" << password << std::endl;
         ofs.close();
-        
+
         // Add to current users list
-        users.push_back({username, password});
+        users.push_back({username, password, false});
+        return true;
+    };
+
+    // Save the full users vector back to users.txt (overwrite)
+    auto SaveAllUsers = [&]() -> bool {
+        std::ofstream ofs("users.txt", std::ios::trunc);
+        if (!ofs) return false;
+        for (const auto &u : users) {
+            ofs << u.name << ":" << u.pass;
+            if (u.isAdmin) ofs << ":admin";
+            ofs << "\n";
+        }
+        ofs.close();
         return true;
     };
 
@@ -574,7 +607,9 @@ int main() {
                 std::string sp = std::string(password);
                 if (CheckLogin(users, su, sp)) {
                     currentUser = su;
-                    isAdmin = (currentUser == "admin");
+                    // Determine admin flag from loaded users
+                    isAdmin = false;
+                    for (const auto &u : users) { if (u.name == currentUser) { isAdmin = u.isAdmin; break; } }
                     loginFailed = false;
                     // load user's cart
                     currentCart = LoadCart(currentUser);
@@ -809,6 +844,10 @@ int main() {
             if (isAdmin) {
                 Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing*2.0f), (float)RW(0.25f), (float)RH(0.1f) };
                 if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 28)) state = STATE_ADD_PRODUCT;
+
+                // Manage Accounts button (admin-only)
+                Rectangle btnManage = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing*3.0f), (float)RW(0.25f), (float)RH(0.1f) };
+                if (DrawButton(btnManage, "Manage Accounts", colors.buttonBg, colors, 24)) state = STATE_USER_MANAGEMENT;
 
                 // Move selector highlight based on menu index (uses uniform spacing)
                 Rectangle selector = { btnView.x, btnView.y + menuIndex * menuSpacing, btnView.width, btnView.height };
@@ -1243,6 +1282,7 @@ int main() {
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
 
+            std::string totStr = "";
             if (currentUser.empty()) {
                 // draw empty state lower to avoid overlapping header
                 DrawTextScaled("Please login to view your cart.", centerX - MeasureTextScaled("Please login to view your cart.", 18)/2, RY(0.30f), 18, colors.accent);
@@ -1353,23 +1393,28 @@ int main() {
                         y += rowH + gap;
                     }
 
-                    // Totals box (fixed bottom right)
+                    // Compute totals string and defer drawing the totals box until after other UI so it isn't overlapped
                     std::ostringstream tot; tot << "Total: $" << std::fixed << std::setprecision(2) << total;
-                    std::string totStr = tot.str();
-                    Rectangle totBox = { (float)(centerX + RW(0.10f)), (float)RY(0.70f), (float)RW(0.34f), (float)RH(0.18f) };
-                    DrawRectangleRec(totBox, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(totBox, 2, colors.primary);
-                    DrawTextScaled(totStr.c_str(), (int)(totBox.x + 12), (int)(totBox.y + 12), 20, colors.primary);
-
-                    // Checkout and Clear buttons
-                    Rectangle checkoutBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f) - 8, totBox.width - 24, RH(0.06f) };
-                    if (DrawButton(checkoutBtn, "Checkout", colors.primary, colors, 20)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
-                    Rectangle clearBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f)*2 - 16, totBox.width - 24, RH(0.06f) };
-                    if (DrawButton(clearBtn, "Clear Cart", (Color){200,70,70,255}, colors, 16)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+                    totStr = tot.str();
+                    // store totStr in a local variable; drawing will happen after main content so it stays on top
                 }
             }
 
             // Draw header last so it appears on top of cards
             DrawTextScaled("My Cart", centerX - MeasureTextScaled("My Cart", 36)/2, RY(0.08f), 36, colors.primary);
+
+            // Draw totals box after everything else so it remains on top and not overlapped
+            {
+                Rectangle totBox = { (float)(centerX + RW(0.10f)), (float)RY(0.70f), (float)RW(0.34f), (float)RH(0.18f) };
+                DrawRectangleRec(totBox, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(totBox, 2, colors.primary);
+                DrawTextScaled(totStr.c_str(), (int)(totBox.x + 12), (int)(totBox.y + 12), 20, colors.primary);
+
+                // Checkout and Clear buttons inside the totals box
+                Rectangle checkoutBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f) - 8, totBox.width - 24, RH(0.06f) };
+                if (DrawButton(checkoutBtn, "Checkout", colors.primary, colors, 20)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+                Rectangle clearBtn = { totBox.x + 12, totBox.y + totBox.height - RH(0.06f)*2 - 16, totBox.width - 24, RH(0.06f) };
+                if (DrawButton(clearBtn, "Clear Cart", (Color){200,70,70,255}, colors, 16)) { currentCart.clear(); SaveCart(currentUser, currentCart); }
+            }
         }
         else if (state == STATE_EDIT_PRODUCTS) {
             // Ensure products loaded
@@ -1435,7 +1480,8 @@ int main() {
 
                 // Form fields (populate from products[editProductIndex])
                 static std::string editName, editPrice, editSize; static int editCategory = 0; static bool populated = false;
-                static std::string editDescription = "", editSale = "";
+                static std::string editDescription = "";
+                static std::string origEditName = ""; // store original name to replace correct file line
                 if (editProductPopulateNeeded || !populated) {
                     const auto &p = products[editProductIndex];
                     editName = p.name;
@@ -1569,24 +1615,42 @@ int main() {
                 Rectangle btnCancel = { actionStartX + (actionW + actionGap) * 2, actionY, actionW, actionH };
 
                 if (DrawButton(btnUpdate, "Update", colors.primary, colors, 20)) {
-                    // write update by index
+                    // write update by finding the original product line by name and replacing it
                     std::ifstream ifs("data/products.txt");
                     if (!ifs) { /* fail */ }
                     else {
                         std::vector<std::string> lines; std::string line;
                         while (std::getline(ifs, line)) lines.push_back(line);
                         ifs.close();
-                        if (editProductIndex >= 0 && editProductIndex < (int)lines.size()) {
-                            std::string sizeToken = editSize;
-                            std::string sexToken;
-                            if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
-                            double saleVal = 0.0;
-                            try { if (!editSale.empty()) saleVal = std::stod(editSale); } catch(...) { saleVal = 0.0; }
-                            // include description field (use outer editDescription)
-                            std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << (int)saleVal << ";" << editDescription;
-                            lines[editProductIndex] = newline.str();
+
+                        std::string sizeToken = editSize;
+                        std::string sexToken;
+                        if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
+                        std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
+                        std::string newLine = newline.str();
+
+                        bool replaced = false;
+                        // Prefer matching by original product name
+                        for (size_t li = 0; li < lines.size(); ++li) {
+                            std::string l = lines[li];
+                            size_t psep = l.find(';');
+                            std::string lineName = (psep==std::string::npos) ? l : l.substr(0, psep);
+                            if (!origEditName.empty() && lineName == origEditName) {
+                                lines[li] = newLine; replaced = true; break;
+                            }
+                        }
+                        // Fallback: use index if not found
+                        if (!replaced && editProductIndex >= 0 && editProductIndex < (int)lines.size()) {
+                            lines[editProductIndex] = newLine; replaced = true;
+                        }
+
+                        if (replaced) {
                             std::ofstream ofs("data/products.txt", std::ios::trunc);
-                            if (ofs) { for (auto &l : lines) ofs << l << "\n"; ofs.close(); productsLoaded = false; needsResort = true; std::string editMsg = "Product updated"; state = STATE_EDIT_PRODUCTS; populated = false; }
+                            if (ofs) {
+                                for (auto &l : lines) ofs << l << "\n";
+                                ofs.close();
+                                productsLoaded = false; needsResort = true; state = STATE_EDIT_PRODUCTS; populated = false;
+                            }
                         }
                     }
                 }
@@ -1631,6 +1695,166 @@ int main() {
 
                 // (input handled above routed by focus)
             }
+        }
+         else if (state == STATE_USER_MANAGEMENT) {
+            // Admin user management: list users, edit password, remove users
+            if (!isAdmin) { state = STATE_MENU; }
+            // Back button
+            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+
+            DrawTextScaled("Manage Accounts", centerX - MeasureTextScaled("Manage Accounts", 28)/2, RY(0.08f), 28, colors.primary);
+
+            // Editable list with scroll/clipping to avoid overlap on large screens (F11)
+            float startY = RY(0.16f);
+            float visibleH = RY(0.70f);
+            float rowH = (float)RH(0.06f);
+            static float usersScroll = 0.0f;
+            static int editUserIndex = -1;
+            static bool editingUser = false;
+            static std::string editUserNewPass = "";
+            // Flag to indicate the edit modal was just opened so we can initialize focus and checkbox state
+            static bool editUserJustOpened = false;
+
+            // Scroll handling (mouse wheel + keyboard)
+            float wheel = GetMouseWheelMove(); usersScroll -= wheel * RH(0.05f);
+            if (IsKeyDown(KEY_DOWN)) usersScroll -= RH(0.01f);
+            if (IsKeyDown(KEY_UP)) usersScroll += RH(0.01f);
+
+            // clamp scroll to content height
+            float contentH = (float)users.size() * rowH;
+            float minScroll = std::min(0.0f, startY + visibleH - (startY + contentH)); // negative or zero
+            if (usersScroll < minScroll) usersScroll = minScroll;
+            if (usersScroll > 0) usersScroll = 0;
+
+            float y = startY + usersScroll;
+            for (size_t i = 0; i < users.size(); ++i) {
+                const auto &u = users[i];
+
+                // Clip: only render rows within visible area
+                if (y + rowH < startY) { y += rowH; continue; }
+                if (y > startY + visibleH) break;
+
+                std::string uname = u.name;
+                std::string displayName = uname + (u.isAdmin ? " (Admin)" : "");
+                DrawTextScaled(displayName.c_str(), RX(0.03f), (int)y, 18, colors.text);
+
+                float actionBtnW = (float)RW(0.18f);
+                float actionBtnH = (float)(rowH * 0.85f);
+                float editBtnX = (float)(sw - RW(0.18f));
+                Rectangle editBtn = { editBtnX, y - rowH*0.15f, actionBtnW, actionBtnH };
+                Rectangle removeBtn = { editBtnX - (actionBtnW + RW(0.02f)), y - rowH*0.15f, actionBtnW, actionBtnH };
+
+                if (DrawButton(editBtn, "Edit", colors.buttonBg, colors, 14)) {
+                    editUserIndex = (int)i;
+                    editingUser = true;
+                    // admin cannot view current password: leave new-pass empty and only update if admin types a new one
+                    editUserNewPass = "";
+                    // mark modal as just opened so we can initialize modal-local state
+                    editUserJustOpened = true;
+                }
+
+                // Do not allow removing the main 'admin' account or the currently logged-in user
+                if (u.name != "admin" && u.name != currentUser) {
+                    if (DrawButton(removeBtn, "Remove", (Color){220,80,80,255}, colors, 14)) {
+                        users.erase(users.begin() + i);
+                        SaveAllUsers();
+                        // after erase, contentH changed; clamp scroll
+                        contentH = (float)users.size() * rowH;
+                        minScroll = std::min(0.0f, startY + visibleH - (startY + contentH));
+                        if (usersScroll < minScroll) usersScroll = minScroll;
+                        // do not increment y (next item occupies same visual slot)
+                        continue;
+                    }
+                } else {
+                    // disabled remove button (draw as plain rect)
+                    DrawRectangleRec(removeBtn, Fade(colors.inputBg, 0.98f));
+                    DrawRectangleLinesEx(removeBtn, 2, colors.primary);
+                    DrawTextScaled("-", (int)(removeBtn.x + removeBtn.width/2 - MeasureTextScaled("-",14)/2), (int)(removeBtn.y + 6), 14, colors.text);
+                }
+
+                y += rowH;
+            }
+
+            // Edit modal / inline area at bottom
+            if (editingUser && editUserIndex >= 0 && editUserIndex < (int)users.size()) {
+                float modalW = RW(0.72f);
+                float modalH = RH(0.28f);
+                // Center the modal inside the visible users area to avoid overlap on tall/fullscreen displays
+                Rectangle modal; modal.x = centerX - modalW/2.0f; modal.y = startY + (visibleH - modalH) / 2.0f; modal.width = modalW; modal.height = modalH;
+                DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(modal, 2, colors.accent);
+                DrawTextScaled("Edit User", (int)modal.x + 12, (int)modal.y + 8, 20, colors.primary);
+
+                // Username (readonly)
+                std::string uname = users[editUserIndex].name;
+                DrawTextScaled("Username:", (int)modal.x + 12, (int)modal.y + 40, 18, colors.text);
+                DrawTextScaled(uname.c_str(), (int)modal.x + 130, (int)modal.y + 40, 18, colors.text);
+
+                // Password input (masked — no reveal button: passwords must remain hidden)
+                DrawTextScaled("Password:", (int)modal.x + 12, (int)modal.y + 72, 18, colors.text);
+                Rectangle passRect = { modal.x + 130, modal.y + 68, modal.width - 150, RH(0.06f) };
+                DrawRectangleRec(passRect, colors.inputBg);
+
+                // Always display masked password (asterisks). Admin cannot reveal stored passwords.
+                std::string passDisplay = editUserNewPass.empty() ? "(no change)" : std::string(editUserNewPass.size(), '*');
+                DrawTextScaled(passDisplay.c_str(), (int)passRect.x + 6, (int)passRect.y + 6, 18, colors.text);
+
+                // persistent focus flag for password input (declare before use)
+                static bool userPassFocus = false;
+                // admin grant toggle state (editable while in modal)
+                static bool editUserGrantAdmin = false;
+                // If the modal was just opened, initialize focus and checkbox state from the user record
+                if (editUserJustOpened) {
+                    userPassFocus = false;
+                    editUserGrantAdmin = users[editUserIndex].isAdmin;
+                    // clear the just-opened flag
+                    editUserJustOpened = false;
+                }
+                // handle clicking into password field to focus
+                Vector2 mpos = GetMousePosition();
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    if (CheckCollisionPointRec(mpos, passRect)) userPassFocus = true; else userPassFocus = false;
+                }
+
+                // Admin grant checkbox UI
+                Rectangle adminChk = { modal.x + 12, modal.y + 104, 20, 20 };
+                // draw checkbox background depending on state
+                DrawRectangleRec(adminChk, editUserGrantAdmin ? colors.primary : Fade(colors.inputBg, 0.98f));
+                DrawRectangleLinesEx(adminChk, 2, colors.primary);
+                DrawTextScaled("Grant admin rights", (int)(adminChk.x + adminChk.width + 8), (int)adminChk.y, 18, colors.text);
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    if (CheckCollisionPointRec(mpos, adminChk) || CheckCollisionPointRec(mpos, (Rectangle){ adminChk.x + adminChk.width + 8, adminChk.y, 200, adminChk.height })) {
+                        editUserGrantAdmin = !editUserGrantAdmin;
+                    }
+                }
+
+                // Draw a visible focus border when the password input is active so it's clear the field has focus
+                if (userPassFocus) DrawRectangleLinesEx(passRect, 2, colors.accent);
+                if (userPassFocus) {
+                    int c = GetCharPressed();
+                    while (c > 0) {
+                        if (c >= 32 && c <= 125 && editUserNewPass.size() < 128) editUserNewPass.push_back((char)c);
+                        c = GetCharPressed();
+                    }
+                    if (IsKeyPressed(KEY_BACKSPACE) && !editUserNewPass.empty()) editUserNewPass.pop_back();
+                }
+
+                // Save / Cancel
+                Rectangle saveBtn = { modal.x + 12, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 18, RH(0.06f) };
+                Rectangle cancelBtn = { modal.x + modal.width * 0.55f + 6, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 18, RH(0.06f) };
+                if (DrawButton(saveBtn, "Save", colors.primary, colors, 18)) {
+                    // commit change: only update password if a new one was entered
+                    if (!editUserNewPass.empty()) users[editUserIndex].pass = editUserNewPass;
+                    // update admin flag according to checkbox
+                    users[editUserIndex].isAdmin = editUserGrantAdmin;
+                    SaveAllUsers();
+                    editingUser = false; editUserIndex = -1; editUserNewPass.clear(); userPassFocus = false;
+                }
+                if (DrawButton(cancelBtn, "Cancel", colors.buttonBg, colors, 18)) {
+                    editingUser = false; editUserIndex = -1; editUserNewPass.clear(); userPassFocus = false;
+                }
+            }
+
         }
          else if (state == STATE_OPTIONS) {
               // Back button

@@ -1,4 +1,4 @@
-admin:1234
+admin:1234:admin
 user:password
 alex:sigmaboy
 alex2:sigma
