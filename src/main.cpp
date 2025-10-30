@@ -917,50 +917,37 @@ int main() {
                     const auto &p = filteredProducts[i];
                     // Draw name
                     DrawTextScaled(p.name.c_str(), RX(0.03f), (int)y, 20, colors.text);
-                    // Price drawing: if sale present, show original price struck-through and sale price highlighted
+                    
+                    // Price column starts after name
+                    float priceX = RX(0.03f) + RW(0.25f);
                     if (p.hasPrice) {
-                        float xPrice = RX(0.03f) + MeasureTextScaled(p.name.c_str(), 20) + RW(0.01f);
                         if (p.hasSale) {
-                            std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << p.price;
-                            std::string orig = std::string("$") + ss.str();
+                            // Original price struck-through
+                            std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << "$" << p.price;
+                            std::string orig = ss.str();
                             int origW = MeasureTextScaled(orig.c_str(), 18);
                             Color faded = Fade(colors.text, 0.6f);
-                            DrawTextScaled(orig.c_str(), (int)xPrice, (int)y, 18, faded);
-                            // strikethrough line in text color (half-height)
+                            DrawTextScaled(orig.c_str(), (int)priceX, (int)y, 18, faded);
                             float lineY = (float)y + ScaledFontSize(18) * 0.5f;
-                            DrawLineEx(Vector2{ xPrice, lineY }, Vector2{ xPrice + origW, lineY }, 2.0f, colors.text);
-                            // Sale price after original (smaller gap)
-                            double originalPrice = p.price;
-                            double salePrice = originalPrice * (1.0 - p.salePercent/100.0);
+                            DrawLineEx(Vector2{ priceX, lineY }, Vector2{ priceX + origW, lineY }, 2.0f, colors.text);
+                            
+                            // Sale price right after
+                            double salePrice = p.price * (1.0 - p.salePercent/100.0);
                             std::ostringstream sps; sps.setf(std::ios::fixed); sps.precision(2); sps << "$" << salePrice;
-                            DrawTextScaled(sps.str().c_str(), (int)(xPrice + origW + RW(0.005f)), (int)(y), 16, colors.primary);
+                            DrawTextScaled(sps.str().c_str(), (int)(priceX + origW + RW(0.01f)), (int)y, 18, colors.primary);
                         } else {
                             std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << "$" << p.price;
-                            DrawTextScaled(ss.str().c_str(), (int)xPrice, (int)y, 18, colors.text);
+                            DrawTextScaled(ss.str().c_str(), (int)priceX, (int)y, 18, colors.text);
                         }
                     }
+
+                    // Size column starts after price
+                    float sizeX = RX(0.45f); // Adjust this value to position size column
                     if (!p.size.empty()) {
-                        std::string sz = " " + p.size; // Simplified size format
-                        float xSz;
-                        if (p.hasPrice) {
-                            if (p.hasSale) {
-                                // Position after sale price
-                                float origW = MeasureTextScaled((std::string("$") + std::to_string(p.price)).c_str(), 18);
-                                float xPrice = RX(0.03f) + MeasureTextScaled(p.name.c_str(), 20) + RW(0.01f);
-                                float saleW = MeasureTextScaled((std::string("$") + std::to_string(p.price * (1.0 - p.salePercent/100.0))).c_str(), 16);
-                                xSz = xPrice + origW + RW(0.005f) + saleW + RW(0.005f);
-                            } else {
-                                // Position after regular price
-                                float xPrice = RX(0.03f) + MeasureTextScaled(p.name.c_str(), 20) + RW(0.01f);
-                                float priceW = MeasureTextScaled((std::string("$") + std::to_string(p.price)).c_str(), 18);
-                                xSz = xPrice + priceW + RW(0.005f);
-                            }
-                        } else {
-                            // Position after name if no price
-                            xSz = RX(0.03f) + MeasureTextScaled(p.name.c_str(), 20) + RW(0.005f);
-                        }
-                        DrawTextScaled(sz.c_str(), (int)xSz, (int)y, 16, Fade(colors.text, 0.8f));
+                        DrawTextScaled(p.size.c_str(), (int)sizeX, (int)y, 16, Fade(colors.text, 0.8f));
                     }
+
+                    // View button stays on the right
                     Rectangle viewBtn = { (float)(sw - RW(0.18f)), y - rowH*0.15f, (float)RW(0.14f), (float)(rowH*0.85f) };
                     if (DrawButton(viewBtn, "View", colors.buttonBg, colors, 14)) viewDescriptionIndex = (int)i;
                 }
