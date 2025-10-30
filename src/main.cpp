@@ -1717,6 +1717,8 @@ int main() {
             static std::string editUserNewPass = "";
             // Flag to indicate the edit modal was just opened so we can initialize focus and checkbox state
             static bool editUserJustOpened = false;
+            static bool editUserCanChangePassword = false;
+            static std::string editUserMsg = "";
 
             // Scroll handling (mouse wheel + keyboard)
             float wheel = GetMouseWheelMove(); usersScroll -= wheel * RH(0.05f);
@@ -1809,13 +1811,21 @@ int main() {
                 if (editUserJustOpened) {
                     userPassFocus = false;
                     editUserGrantAdmin = users[editUserIndex].isAdmin;
+                    // Only allow changing password if editing your own account
+                    editUserCanChangePassword = (users[editUserIndex].name == currentUser);
+                    // clear any previous messages
+                    editUserMsg.clear();
                     // clear the just-opened flag
                     editUserJustOpened = false;
                 }
                 // handle clicking into password field to focus
                 Vector2 mpos = GetMousePosition();
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-                    if (CheckCollisionPointRec(mpos, passRect)) userPassFocus = true; else userPassFocus = false;
+                    if (CheckCollisionPointRec(mpos, passRect)) {
+                        // only allow focusing the password field when editing your own account
+                        if (editUserCanChangePassword) userPassFocus = true;
+                        else userPassFocus = false;
+                    } else userPassFocus = false;
                 }
 
                 // Admin grant checkbox UI
@@ -1832,29 +1842,49 @@ int main() {
 
                 // Draw a visible focus border when the password input is active so it's clear the field has focus
                 if (userPassFocus) DrawRectangleLinesEx(passRect, 2, colors.accent);
-                if (userPassFocus) {
-                    int c = GetCharPressed();
-                    while (c > 0) {
+
+                // Character input for password field. Only allow typing when editing your own account.
+                int c = GetCharPressed();
+                if (c > 0 && !userPassFocus && editUserCanChangePassword) {
+                    // begin editing password when any printable char is typed while modal is open
+                    userPassFocus = true;
+                }
+                while (c > 0) {
+                    if (editUserCanChangePassword) {
                         if (c >= 32 && c <= 125 && editUserNewPass.size() < 128) editUserNewPass.push_back((char)c);
-                        c = GetCharPressed();
                     }
-                    if (IsKeyPressed(KEY_BACKSPACE) && !editUserNewPass.empty()) editUserNewPass.pop_back();
+                    c = GetCharPressed();
+                }
+                if (IsKeyPressed(KEY_BACKSPACE) && !editUserNewPass.empty() && editUserCanChangePassword) editUserNewPass.pop_back();
+
+                // If admin is editing another user, show a small explanatory message
+                if (!editUserCanChangePassword) {
+                    DrawTextScaled("Admins cannot change other users' passwords.", (int)(passRect.x), (int)(passRect.y + passRect.height + 6), 14, ORANGE);
                 }
 
                 // Save / Cancel
                 Rectangle saveBtn = { modal.x + 12, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 18, RH(0.06f) };
                 Rectangle cancelBtn = { modal.x + modal.width * 0.55f + 6, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 18, RH(0.06f) };
                 if (DrawButton(saveBtn, "Save", colors.primary, colors, 18)) {
-                    // commit change: only update password if a new one was entered
-                    if (!editUserNewPass.empty()) users[editUserIndex].pass = editUserNewPass;
+                    // commit change: only update password if a new one was entered AND the admin is editing their own account
+                    if (!editUserNewPass.empty()) {
+                        if (editUserCanChangePassword) {
+                            users[editUserIndex].pass = editUserNewPass;
+                        } else {
+                            editUserMsg = "Cannot change another user's password.";
+                        }
+                    }
                     // update admin flag according to checkbox
                     users[editUserIndex].isAdmin = editUserGrantAdmin;
                     SaveAllUsers();
-                    editingUser = false; editUserIndex = -1; editUserNewPass.clear(); userPassFocus = false;
+                    if (editUserMsg.empty()) {
+                        editingUser = false; editUserIndex = -1; editUserNewPass.clear(); userPassFocus = false;
+                    }
                 }
                 if (DrawButton(cancelBtn, "Cancel", colors.buttonBg, colors, 18)) {
-                    editingUser = false; editUserIndex = -1; editUserNewPass.clear(); userPassFocus = false;
+                    editingUser = false; editUserIndex = -1; editUserNewPass.clear(); userPassFocus = false; editUserMsg.clear();
                 }
+                if (!editUserMsg.empty()) DrawTextScaled(editUserMsg.c_str(), (int)(modal.x + 12), (int)(modal.y + modal.height - RH(0.08f) - 36), 14, ORANGE);
             }
 
         }
