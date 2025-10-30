@@ -1,9 +1,10 @@
-Jeans;39.50;L;;W;
+meias do spongebob;9.99;XXS;;K;
 Jacket;59.99;XL;;W;
-Macacao;34.37;M;;B;
+adbnuj;19.00;S;;M;
 boxers_batman;99.44;M;;M;
 meias do spongebob;9.99;XXS;;K;
 botas vermelhas;67.32;M;;W;
 adbnuj;19;S;;M;
-casaco verdre;35.99;S;;K;
+casaco verdre;35.99;S;;K;50;
 boxers_batman;99.44;M;;M;99;
+adbnuj;19.00;S;;M;50;

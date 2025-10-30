@@ -1509,6 +1509,8 @@ int main() {
                         std::ostringstream ssp; ssp << (int)p.salePercent;
                         editSale = ssp.str();
                     } else editSale.clear();
+                    // remember original name for safer name-based replacement
+                    origEditName = p.name;
                     populated = true;
                     editProductPopulateNeeded = false;
                 }
@@ -1636,15 +1638,25 @@ int main() {
                         std::vector<std::string> lines; std::string line;
                         while (std::getline(ifs, line)) lines.push_back(line);
                         ifs.close();
+                        // parse sale percent (if provided)
+                        int salePercentVal = 0; bool okSale = false;
+                        if (!editSale.empty()) {
+                            try { salePercentVal = std::stoi(editSale); okSale = true; }
+                            catch(...) { okSale = false; salePercentVal = 0; }
+                        }
 
                         std::string sizeToken = editSize;
+                        std::string fabricToken = "";
                         std::string sexToken;
                         if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
-                        std::ostringstream newline; newline << editName << ";" << editPrice << ";" << sizeToken << ";" << "" << ";" << sexToken << ";" << editDescription;
+
+                        // Build new product line using canonical format: name;price;size;fabric;sex;sale;description
+                        std::ostringstream newline;
+                        newline << editName << ";" << editPrice << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string(salePercentVal) : "0") << ";" << editDescription;
                         std::string newLine = newline.str();
 
                         bool replaced = false;
-                        // Prefer matching by original product name
+                        // Replace the original product line with the updated one (match by original name, fallback to index).
                         for (size_t li = 0; li < lines.size(); ++li) {
                             std::string l = lines[li];
                             size_t psep = l.find(';');
