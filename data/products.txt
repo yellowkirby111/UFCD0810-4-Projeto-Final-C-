@@ -1,5 +1,4 @@
 Jeans;39.50;L;;W;
-meias do spongebob;9.99;XXS;;K;0;
 Jacket;59.99;XL;;W;
 Macacao;34.37;M;;B;
 boxers_batman;99.44;M;;M;

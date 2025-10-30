@@ -1446,16 +1446,28 @@ int main() {
                         state = STATE_EDIT_PRODUCT;
                     }
                     if (DrawButton(removeBtn, "Remove", colors.buttonBg, colors, 14)) {
-                        // Remove product by index i from file and refresh
+                        // Remove product by name (safer when in-memory ordering differs from file order)
+                        const std::string targetName = p.name;
                         std::ifstream ifs("data/products.txt");
-                        if (!ifs) {
-                            // nothing to do
-                        } else {
+                        if (ifs) {
                             std::vector<std::string> lines; std::string line;
                             while (std::getline(ifs, line)) lines.push_back(line);
                             ifs.close();
-                            if (i < lines.size()) {
-                                lines.erase(lines.begin() + i);
+
+                            bool erased = false;
+                            for (auto it = lines.begin(); it != lines.end(); ++it) {
+                                std::string l = *it;
+                                if (l.empty()) continue;
+                                size_t psep = l.find(';');
+                                std::string lineName = (psep == std::string::npos) ? l : l.substr(0, psep);
+                                if (lineName == targetName) {
+                                    lines.erase(it);
+                                    erased = true;
+                                    break;
+                                }
+                            }
+
+                            if (erased) {
                                 std::ofstream ofs("data/products.txt", std::ios::trunc);
                                 if (ofs) {
                                     for (auto &l : lines) ofs << l << "\n";
