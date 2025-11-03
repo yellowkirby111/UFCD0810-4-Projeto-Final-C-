@@ -843,7 +843,7 @@ int main() {
             // Only show Add Product button if admin (placed under Cart)
             if (isAdmin) {
                 Rectangle btnAdd = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing*2.0f), (float)RW(0.25f), (float)RH(0.1f) };
-                if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 28)) state = STATE_ADD_PRODUCT;
+                if (DrawButton(btnAdd, "Edit Product", colors.buttonBg, colors, 28)) state = STATE_EDIT_PRODUCTS;
 
                 // Manage Accounts button (admin-only)
                 Rectangle btnManage = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing*3.0f), (float)RW(0.25f), (float)RH(0.1f) };
@@ -1044,7 +1044,7 @@ int main() {
         else if (state == STATE_ADD_PRODUCT) {
             // Back button
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_EDIT_PRODUCTS;
 
             // Quick link to Edit Products
             Rectangle editProductsBtn = { (float)(sw - RW(0.18f)), (float)RY(0.025f), (float)RW(0.16f), (float)RH(0.05f) };
@@ -1422,10 +1422,13 @@ int main() {
 
             // Back to Add Product screen
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_ADD_PRODUCT;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
 
             DrawTextScaled("Edit Products", centerX - MeasureTextScaled("Edit Products", 28)/2, RY(0.08f), 28, colors.primary);
 
+
+            Rectangle btnAdd = { (float)RX(0.4f), (float)RY(0.8f), (float)RW(0.16f), (float)RH(0.08f) };
+                if (DrawButton(btnAdd, "Add Product", colors.buttonBg, colors, 24)) state = STATE_ADD_PRODUCT;
             // Simple scrollable list of products with Edit buttons
             float startY = RY(0.16f);
             float rowH = (float)RH(0.05f);
@@ -1445,7 +1448,7 @@ int main() {
                         editProductPopulateNeeded = true;
                         state = STATE_EDIT_PRODUCT;
                     }
-                    if (DrawButton(removeBtn, "Remove", colors.buttonBg, colors, 14)) {
+                    if (DrawButton(removeBtn, "Remove", (Color){220,80,80,255}, colors, 14)) {
                         // Remove product by name (safer when in-memory ordering differs from file order)
                         const std::string targetName = p.name;
                         std::ifstream ifs("data/products.txt");
