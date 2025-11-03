@@ -251,14 +251,6 @@ int main() {
     int selectedCategory = 0; // 0=All,1=Criança,2=Homem,3=Mulher,4=Bebê
     int editProductIndex = -1; // used by Edit Products screens
     bool editProductPopulateNeeded = false;
-    
-    bool showResetPasswordModal = false;
-    char resetCurrentPass[32] = "";
-    char resetNewPass[32] = "";
-    char resetConfirmPass[32] = "";
-    bool resetFailed = false;
-    std::string resetMessage = "";
-    int resetInputFocus = 0;
 
     auto LoadProducts = [&](const std::string &path) -> bool {
         products.clear();
@@ -1436,6 +1428,311 @@ int main() {
 
             // Simple scrollable list of products with Edit buttons
             float startY = RY(0.16f);
+            float rowH = (float)RH(0.05f);
+            float y = startY;
+            for (size_t i = 0; i < products.size(); ++i) {
+                if (y > RY(0.18f) + RY(0.70f)) break; // don't render past area
+                const auto &p = products[i];
+                std::ostringstream ss; ss << p.name; if (p.hasPrice) { ss << " - $" << std::fixed << std::setprecision(2) << p.price; }
+                DrawTextScaled(ss.str().c_str(), RX(0.03f), (int)y, 18, colors.text);
+                    float actionBtnW = (float)RW(0.14f);
+                    float actionBtnH = (float)(rowH * 0.85f);
+                    float editBtnX = (float)(sw - RW(0.18f));
+                    Rectangle editBtn = { editBtnX, y - rowH*0.15f, actionBtnW, actionBtnH };
+                    Rectangle removeBtn = { editBtnX - (actionBtnW + RW(0.02f)), y - rowH*0.15f, actionBtnW, actionBtnH };
+                    if (DrawButton(editBtn, "Edit", colors.buttonBg, colors, 14)) {
+                        editProductIndex = (int)i;
+                        editProductPopulateNeeded = true;
+                        state = STATE_EDIT_PRODUCT;
+                    }
+                    if (DrawButton(removeBtn, "Remove", colors.buttonBg, colors, 14)) {
+                        // Remove product by name (safer when in-memory ordering differs from file order)
+                        const std::string targetName = p.name;
+                        std::ifstream ifs("data/products.txt");
+                        if (ifs) {
+                            std::vector<std::string> lines; std::string line;
+                            while (std::getline(ifs, line)) lines.push_back(line);
+                            ifs.close();
+
+                            bool erased = false;
+                            for (auto it = lines.begin(); it != lines.end(); ++it) {
+                                std::string l = *it;
+                                if (l.empty()) continue;
+                                size_t psep = l.find(';');
+                                std::string lineName = (psep == std::string::npos) ? l : l.substr(0, psep);
+                                if (lineName == targetName) {
+                                    lines.erase(it);
+                                    erased = true;
+                                    break;
+                                }
+                            }
+
+                            if (erased) {
+                                std::ofstream ofs("data/products.txt", std::ios::trunc);
+                                if (ofs) {
+                                    for (auto &l : lines) ofs << l << "\n";
+                                    ofs.close();
+                                    productsLoaded = false; needsResort = true;
+                                }
+                            }
+                        }
+                    }
+                y += rowH;
+            }
+        }
+        else if (state == STATE_EDIT_PRODUCT) {
+            // Edit a single product by index
+            if (editProductIndex < 0 || editProductIndex >= (int)products.size()) { state = STATE_EDIT_PRODUCTS; }
+            else {
+                // Back button
+                Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+                if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_EDIT_PRODUCTS;
+
+                DrawTextScaled("Edit Product", centerX - MeasureTextScaled("Edit Product", 28)/2, RY(0.05f), 28, colors.primary);
+
+                // Form fields (populate from products[editProductIndex])
+                static std::string editName, editPrice, editSize, editSale; // Added editSale here
+                static int editCategory = 0;
+                static bool populated = false;
+                static std::string editDescription = "";
+                static std::string origEditName = "";
+                if (editProductPopulateNeeded || !populated) {
+                    const auto &p = products[editProductIndex];
+                    editName = p.name;
+                    if (p.hasPrice) { std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << p.price; editPrice = ss.str(); } else editPrice.clear();
+                    editSize = p.size;
+                    std::string s = p.sex; std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+                    if (s == "m") editCategory = 1; else if (s == "w") editCategory = 2; else if (s == "k") editCategory = 3; else if (s == "b") editCategory = 4; else editCategory = 0;
+                    editDescription = p.description;
+                    // sale populate
+                    if (p.hasSale) {
+                        std::ostringstream ssp; ssp << (int)p.salePercent;
+                        editSale = ssp.str();
+                    } else editSale.clear();
+                    // remember original name for safer name-based replacement
+                    origEditName = p.name;
+                    populated = true;
+                    editProductPopulateNeeded = false;
+                }
+
+                // Layout like Add Product (simplified)
+                float topY = RY(0.15f);
+                float labelX = RX(0.12f);
+                float inputX = RX(0.30f);
+                float fullW = RW(0.58f);
+                float inputH = RH(0.06f);
+                float gapV = RH(0.035f);
+
+                Rectangle nameRect = { inputX, topY, fullW, inputH };
+                Rectangle priceRect = { inputX, nameRect.y + inputH + gapV, fullW * 0.4f, inputH };
+                float catX = priceRect.x + priceRect.width + RW(0.02f);
+                float catBtnW = RW(0.06f), catBtnH = inputH * 0.9f, catGap = RW(0.015f);
+                Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
+
+                DrawTextScaled("Name:", labelX, (int)nameRect.y + 6, 20, colors.text);
+                DrawRectangleRec(nameRect, colors.inputBg);
+                DrawTextScaled(editName.c_str(), (int)nameRect.x + 8, (int)nameRect.y + 6, 18, colors.text);
+
+                DrawTextScaled("Price:", labelX, (int)priceRect.y + 6, 20, colors.text);
+                DrawRectangleRec(priceRect, colors.inputBg);
+                DrawTextScaled(editPrice.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
+
+                // Draw sale input near price
+                Rectangle saleRectEdit = { priceRect.x + priceRect.width + RW(0.02f), priceRect.y, RW(0.12f), priceRect.height };
+                DrawTextScaled("Sale%:", (int)(saleRectEdit.x - MeasureTextScaled("Sale%:", 18) - 6), (int)saleRectEdit.y + 6, 18, colors.text);
+                DrawRectangleRec(saleRectEdit, colors.inputBg);
+                DrawTextScaled(editSale.c_str(), (int)saleRectEdit.x + 6, (int)saleRectEdit.y + 6, 18, colors.text);
+                static bool saleFocus = false;
+                if (saleFocus) DrawRectangleLinesEx(saleRectEdit, 2, colors.accent);
+
+                // Category selection (M/W/K/B) placed to the right of Price (label removed)
+                static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
+                const std::vector<std::string> catLabels = {"M","W","K","B"};
+                for (size_t ci = 0; ci < catLabels.size(); ++ci) {
+                    Rectangle cb = { catX + ci * (catBtnW + catGap), priceRect.y + (priceRect.height - catBtnH)/2.0f, catBtnW, catBtnH };
+                    if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) editCategory = (int)ci + 1;
+                    if (editCategory == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
+                }
+
+                // Size selection — buttons centered inside sizeAreaRect
+                DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
+                static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
+                float sbtnW = RW(0.09f), sbtnH = inputH * 0.9f, sGap = RW(0.02f);
+                float totalS = sbtnW * (float)sizeOptions.size() + sGap * ((float)sizeOptions.size() - 1.0f);
+                float startSx = inputX + (fullW - totalS) / 2.0f;
+                float sBtnsY = sizeAreaRect.y + (sizeAreaRect.height - sbtnH) / 2.0f;
+                for (size_t si = 0; si < sizeOptions.size(); ++si) {
+                    Rectangle sb = { startSx + si * (sbtnW + sGap), sBtnsY, sbtnW, sbtnH };
+                    if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) { editSize = sizeOptions[si]; }
+                    if (!editSize.empty() && editSize == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, colors.accent);
+                }
+
+                // Action buttons layout (compute early so description rect can be placed relative to them)
+                // Use unique early names here to avoid redeclaration collisions later
+                float actionY_early = sizeAreaRect.y + inputH + gapV;
+                float actionW_early = RW(0.22f), actionH_early = RH(0.08f), actionGap_early = RW(0.04f);
+                float totalActionW_early = actionW_early * 2 + actionGap_early;
+                float actionStartX_early = centerX - totalActionW_early / 2.0f;
+                Rectangle btnUpdate_early = { actionStartX_early, actionY_early, actionW_early, actionH_early };
+                Rectangle btnCancel_early = { actionStartX_early + actionW_early + actionGap_early, actionY_early, actionW_early, actionH_early };
+
+                // Description rectangle computed now so click handling can reference it
+                // Compute description area using the early action layout values
+                float descY = actionY_early + actionH_early + (float)RH(0.02f);
+                float descH = (float)RH(0.18f);
+                Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH;
+
+                // Click-to-focus and keyboard input for Name/Price/Description fields
+                static int editFieldFocus = 0; // 0=name, 1=price, 2=none
+                static bool descFocus = false;
+                Vector2 mousePos = GetMousePosition();
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    if (CheckCollisionPointRec(mousePos, nameRect)) { editFieldFocus = 0; descFocus = false; saleFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, priceRect)) { editFieldFocus = 1; descFocus = false; saleFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, descRect)) { descFocus = true; editFieldFocus = 2; saleFocus = false; }
+                    else if (CheckCollisionPointRec(mousePos, saleRectEdit)) { saleFocus = true; editFieldFocus = 2; descFocus = false; }
+                    else { editFieldFocus = 2; descFocus = false; saleFocus = false; }
+                }
+                // draw focus indicators
+                if (editFieldFocus == 0) DrawRectangleLinesEx(nameRect, 2, colors.accent);
+                if (editFieldFocus == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
+                // (desc focus border will be drawn after the description area is rendered so it is visible)
+
+                // Text input handling routed by focus
+                int ch = GetCharPressed();
+                while (ch > 0) {
+                    if (ch >= 32 && ch <= 125) {
+                        if (descFocus && editDescription.size() < 2048) editDescription.push_back((char)ch);
+                        else if (!descFocus && editFieldFocus == 0 && editName.size() < 200) editName.push_back((char)ch);
+                        else if (!descFocus && editFieldFocus == 1 && editPrice.size() < 64) editPrice.push_back((char)ch);
+                        else if (saleFocus && editSale.size() < 6) editSale.push_back((char)ch);
+                    }
+                    ch = GetCharPressed();
+                }
+                if (IsKeyPressed(KEY_BACKSPACE)) {
+                    if (descFocus && !editDescription.empty()) editDescription.pop_back();
+                    else if (!descFocus && editFieldFocus == 0 && !editName.empty()) editName.pop_back();
+                    else if (!descFocus && editFieldFocus == 1 && !editPrice.empty()) editPrice.pop_back();
+                    else if (saleFocus && !editSale.empty()) editSale.pop_back();
+                }
+                if (IsKeyPressed(KEY_TAB)) {
+                    if (!descFocus) {
+                        if (editFieldFocus == 0) editFieldFocus = 1; else editFieldFocus = 0;
+                    }
+                }
+
+                // Action buttons: Update, Delete, Cancel
+                float actionY = sizeAreaRect.y + inputH + gapV;
+                float actionW = RW(0.22f), actionH = RH(0.08f), actionGap = RW(0.04f);
+                float totalActionW = actionW * 3 + actionGap * 2;
+                float actionStartX = centerX - totalActionW / 2.0f;
+                Rectangle btnUpdate = { actionStartX, actionY, actionW, actionH };
+                Rectangle btnDelete = { actionStartX + actionW + actionGap, actionY, actionW, actionH };
+                Rectangle btnCancel = { actionStartX + (actionW + actionGap) * 2, actionY, actionW, actionH };
+
+                if (DrawButton(btnUpdate, "Update", colors.primary, colors, 20)) {
+                    // write update by finding the original product line by name and replacing it
+                    std::ifstream ifs("data/products.txt");
+                    if (!ifs) { /* fail */ }
+                    else {
+                        std::vector<std::string> lines; std::string line;
+                        while (std::getline(ifs, line)) lines.push_back(line);
+                        ifs.close();
+                        // parse sale percent (if provided)
+                        int salePercentVal = 0; bool okSale = false;
+                        if (!editSale.empty()) {
+                            try { salePercentVal = std::stoi(editSale); okSale = true; }
+                            catch(...) { okSale = false; salePercentVal = 0; }
+                        }
+
+                        std::string sizeToken = editSize;
+                        std::string fabricToken = "";
+                        std::string sexToken;
+                        if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
+
+                        // Build new product line using canonical format: name;price;size;fabric;sex;sale;description
+                        std::ostringstream newline;
+                        newline << editName << ";" << editPrice << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string(salePercentVal) : "0") << ";" << editDescription;
+                        std::string newLine = newline.str();
+
+                        bool replaced = false;
+                        // Replace the original product line with the updated one (match by original name, fallback to index).
+                        for (size_t li = 0; li < lines.size(); ++li) {
+                            std::string l = lines[li];
+                            size_t psep = l.find(';');
+                            std::string lineName = (psep==std::string::npos) ? l : l.substr(0, psep);
+                            if (!origEditName.empty() && lineName == origEditName) {
+                                lines[li] = newLine; replaced = true; break;
+                            }
+                        }
+                        // Fallback: use index if not found
+                        if (!replaced && editProductIndex >= 0 && editProductIndex < (int)lines.size()) {
+                            lines[editProductIndex] = newLine; replaced = true;
+                        }
+
+                        if (replaced) {
+                            std::ofstream ofs("data/products.txt", std::ios::trunc);
+                            if (ofs) {
+                                for (auto &l : lines) ofs << l << "\n";
+                                ofs.close();
+                                productsLoaded = false; needsResort = true; state = STATE_EDIT_PRODUCTS; populated = false;
+                            }
+                        }
+                    }
+                }
+                if (DrawButton(btnDelete, "Delete", (Color){220,80,80,255}, colors, 20)) {
+                    // remove this product by index
+                    std::ifstream ifs("data/products.txt");
+                    if (ifs) {
+                        std::vector<std::string> lines; std::string line;
+                        while (std::getline(ifs, line)) lines.push_back(line);
+                        ifs.close();
+                        if (editProductIndex >= 0 && editProductIndex < (int)lines.size()) {
+                            lines.erase(lines.begin() + editProductIndex);
+                            std::ofstream ofs("data/products.txt", std::ios::trunc);
+                            if (ofs) { for (auto &l : lines) ofs << l << "\n"; ofs.close(); }
+                            productsLoaded = false; needsResort = true; populated = false; state = STATE_EDIT_PRODUCTS;
+                        }
+                    }
+                }
+                if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) { state = STATE_EDIT_PRODUCTS; populated = false; }
+
+                // Description textarea below action buttons (draw using descRect defined above)
+                DrawTextScaled("Description:", labelX, (int)descRect.y - 18, 18, colors.text);
+                DrawRectangleRec(descRect, colors.inputBg);
+                // show text (simple multi-line naive wrap)
+                int lineY = (int)descRect.y + 6;
+                std::istringstream iss(editDescription);
+                std::string tokenLine;
+                while (std::getline(iss, tokenLine)) {
+                    DrawTextScaled(tokenLine.c_str(), (int)descRect.x + 6, lineY, 16, colors.text);
+                    lineY += 20;
+                }
+
+                // Debug overlay: show focus and input state to help diagnose why typing may not register
+                {
+                    bool mouseInDesc = CheckCollisionPointRec(mousePos, descRect);
+                    std::ostringstream dbg; dbg << "descFocus=" << (descFocus?"1":"0") << " editFieldFocus=" << editFieldFocus << " descLen=" << editDescription.size() << " mouseInDesc=" << (mouseInDesc?"1":"0");
+                    DrawTextScaled(dbg.str().c_str(), (int)inputX, (int)(descRect.y + descRect.height + 8), 14, colors.accent);
+                }
+
+                // Draw focus border for description (after the rect/content so it remains visible)
+                if (descFocus) DrawRectangleLinesEx(descRect, 2, colors.accent);
+
+                // (input handled above routed by focus)
+            }
+        }
+         else if (state == STATE_USER_MANAGEMENT) {
+            // Admin user management: list users, edit password, remove users
+            if (!isAdmin) { state = STATE_MENU; }
+            // Back button
+            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+
+            DrawTextScaled("Manage Accounts", centerX - MeasureTextScaled("Manage Accounts", 28)/2, RY(0.08f), 28, colors.primary);
+
+            // Editable list with scroll/clipping to avoid overlap on large screens (F11)
+            float startY = RY(0.16f);
             float visibleH = RY(0.70f);
             float rowH = (float)RH(0.06f);
             static float usersScroll = 0.0f;
@@ -1509,30 +1806,26 @@ int main() {
 
             // Edit modal / inline area at bottom
             if (editingUser && editUserIndex >= 0 && editUserIndex < (int)users.size()) {
-                // Adjust modal sizing/spacing depending on window mode to improve layout in small window vs windowed-fullscreen
-                float modalW = (currentWindowMode == WM_WINDOWED) ? RW(0.64f) : RW(0.72f);
-                float modalH = (currentWindowMode == WM_WINDOWED) ? RH(0.32f) : RH(0.28f);
-                // extra vertical offset: give more breathing room in windowed-fullscreen
-                float extraV = (currentWindowMode == WM_WINDOWED_FULLSCREEN) ? RH(0.03f) : 0.0f;
-                Rectangle modal; modal.x = centerX - modalW/2.0f; modal.y = startY + (visibleH - modalH) / 2.0f + extraV; modal.width = modalW; modal.height = modalH;
+                float modalW = RW(0.72f);
+                float modalH = RH(0.28f);
+                // Center the modal inside the visible users area to avoid overlap on tall/fullscreen displays
+                Rectangle modal; modal.x = centerX - modalW/2.0f; modal.y = startY + (visibleH - modalH) / 2.0f; modal.width = modalW; modal.height = modalH;
                 DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f)); DrawRectangleLinesEx(modal, 2, colors.accent);
                 DrawTextScaled("Edit User", (int)modal.x + 12, (int)modal.y + 8, 20, colors.primary);
 
-                // Username (readonly) with responsive label placement
-                float labelX = modal.x + 12;
-                float valueX = modal.x + 130;
-                // Adjusted username display with better vertical spacing
-                float labelTopMargin = RH(0.04f); // 4% of screen height margin
-                float labelY = modal.y + labelTopMargin;
-                DrawTextScaled("Username:", (int)labelX, (int)labelY, 20, colors.text);
-                if (currentWindowMode == WM_FULLSCREEN || currentWindowMode == WM_WINDOWED_FULLSCREEN)
-                    DrawTextScaled(users[editUserIndex].name.c_str(), (int)(valueX+ 75), (int)labelY, 20, colors.text);
-                else
-                    DrawTextScaled(users[editUserIndex].name.c_str(), (int)(valueX ), (int)labelY, 20, colors.text);
+                // Username (readonly)
+                std::string uname = users[editUserIndex].name;
+                DrawTextScaled("Username:", (int)modal.x + 12, (int)modal.y + 40, 18, colors.text);
+                DrawTextScaled(uname.c_str(), (int)modal.x + 130, (int)modal.y + 40, 18, colors.text);
 
-
+                // Password input (masked — no reveal button: passwords must remain hidden)
+                DrawTextScaled("Password:", (int)modal.x + 12, (int)modal.y + 72, 18, colors.text);
                 Rectangle passRect = { modal.x + 130, modal.y + 68, modal.width - 150, RH(0.06f) };
+                DrawRectangleRec(passRect, colors.inputBg);
 
+                // Always display masked password (asterisks). Admin cannot reveal stored passwords.
+                std::string passDisplay = editUserNewPass.empty() ? "(no change)" : std::string(editUserNewPass.size(), '*');
+                DrawTextScaled(passDisplay.c_str(), (int)passRect.x + 6, (int)passRect.y + 6, 18, colors.text);
 
                 // persistent focus flag for password input (declare before use)
                 static bool userPassFocus = false;
@@ -1588,6 +1881,10 @@ int main() {
                 }
                 if (IsKeyPressed(KEY_BACKSPACE) && !editUserNewPass.empty() && editUserCanChangePassword) editUserNewPass.pop_back();
 
+                // If admin is editing another user, show a small explanatory message
+                if (!editUserCanChangePassword) {
+                    DrawTextScaled("Admins cannot change other users' passwords.", (int)(passRect.x), (int)(passRect.y + passRect.height + 6), 14, ORANGE);
+                }
 
                 // Save / Cancel
                 Rectangle saveBtn = { modal.x + 12, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 18, RH(0.06f) };
@@ -1616,12 +1913,13 @@ int main() {
 
         }
          else if (state == STATE_OPTIONS) {
-              // Back button (don't reset showResetPasswordModal when clicking back)
+              // Back button
              Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
              if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) {
-                 state = STATE_MENU;
-                 // Don't reset showResetPasswordModal here
-             }
+                  state = STATE_MENU;
+              }
+             DrawTextScaled("Options", centerX - MeasureTextScaled("Options", 32)/2, RY(0.12f), 32, colors.primary);
+             
 
              // Theme selection section (responsive layout)
              float sectionTop = RY(0.22f);
@@ -1671,158 +1969,10 @@ int main() {
              if (DrawButton(fsBtn, "Fullscreen", fsColor, colors, 20)) {
                  ApplyWindowMode(WM_FULLSCREEN);
              }
-
-                float resetY = winBtnsY + winBtnH + RH(0.06f);
-                DrawTextScaled("Reset Password", centerX - MeasureTextScaled("Reset Password", 24)/2, resetY, 24, colors.text);
-                Rectangle resetBtn = { centerX - RW(0.15f)/2.0f, resetY + RH(0.06f), RW(0.15f), RH(0.06f) };
-                if (DrawButton(resetBtn, "Reset", colors.buttonBg, colors, 20)) {
-                    showResetPasswordModal = true;
-                    resetInputFocus = 0; // Reset focus when opening modal
-                    resetMessage.clear(); // Clear any previous messages
-                }
-
-                // Modal should stay visible until explicitly closed
-                if (showResetPasswordModal) {
-                    // Modal dialog for password reset
-                    float modalW = RW(0.40f);
-                    float modalH = RH(0.40f);
-                    Rectangle modal = { centerX - modalW/2.0f, RY(0.30f), modalW, modalH };
-                    DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f));
-                    DrawRectangleLinesEx(modal, 2, colors.accent);
-                    
-                    float inputW = modalW * 0.7f;
-                    float inputH = RH(0.06f);
-                    float inputX = modal.x + (modalW - inputW)/2.0f;
-                    float startY = modal.y + RH(0.04f);
-                    float gapY = RH(0.08f);
-                    
-                    // Current password field
-                    Rectangle currentPassRect = { inputX, startY, inputW, inputH };
-                    DrawTextScaled("Current Password:", (int)inputX, (int)(startY - 24), 18, colors.text);
-                    DrawRectangleRec(currentPassRect, colors.inputBg);
-                    DrawTextScaled(std::string(strlen(resetCurrentPass), '*').c_str(), (int)currentPassRect.x + 6, (int)currentPassRect.y + 6, 18, colors.text);
-                    if (resetInputFocus == 0) DrawRectangleLinesEx(currentPassRect, 2, colors.accent);
-                    
-                    // New password field
-                    Rectangle newPassRect = { inputX, startY + gapY, inputW, inputH };
-                    DrawTextScaled("New Password:", (int)inputX, (int)(startY + gapY - 24), 18, colors.text);
-                    DrawRectangleRec(newPassRect, colors.inputBg);
-                    DrawTextScaled(std::string(strlen(resetNewPass), '*').c_str(), (int)newPassRect.x + 6, (int)newPassRect.y + 6, 18, colors.text);
-                    if (resetInputFocus == 1) DrawRectangleLinesEx(newPassRect, 2, colors.accent);
-                    
-                    // Confirm password field
-                    Rectangle confirmPassRect = { inputX, startY + gapY*2, inputW, inputH };
-                    DrawTextScaled("Confirm New Password:", (int)inputX, (int)(startY + gapY*2 - 24), 18, colors.text);
-                    DrawRectangleRec(confirmPassRect, colors.inputBg);
-                    DrawTextScaled(std::string(strlen(resetConfirmPass), '*').c_str(), (int)confirmPassRect.x + 6, (int)confirmPassRect.y + 6, 18, colors.text);
-                    if (resetInputFocus == 2) DrawRectangleLinesEx(confirmPassRect, 2, colors.accent);
-
-                    // Input handling
-                    Vector2 mouse = GetMousePosition();
-                    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-                        if (CheckCollisionPointRec(mouse, currentPassRect)) resetInputFocus = 0;
-                        else if (CheckCollisionPointRec(mouse, newPassRect)) resetInputFocus = 1;
-                        else if (CheckCollisionPointRec(mouse, confirmPassRect)) resetInputFocus = 2;
-                    }
-
-                    if (resetInputFocus >= 0) {
-                        int key = GetCharPressed();
-                        while (key > 0) {
-                            if (key >= 32 && key <= 125) {
-                                if (resetInputFocus == 0 && strlen(resetCurrentPass) < sizeof(resetCurrentPass)-1) {
-                                    int len = strlen(resetCurrentPass);
-                                    resetCurrentPass[len] = (char)key;
-                                    resetCurrentPass[len+1] = '\0';
-                                }
-                                else if (resetInputFocus == 1 && strlen(resetNewPass) < sizeof(resetNewPass)-1) {
-                                    int len = strlen(resetNewPass);
-                                    resetNewPass[len] = (char)key;
-                                    resetNewPass[len+1] = '\0';
-                                }
-                                else if (resetInputFocus == 2 && strlen(resetConfirmPass) < sizeof(resetConfirmPass)-1) {
-                                    int len = strlen(resetConfirmPass);
-                                    resetConfirmPass[len] = (char)key;
-                                    resetConfirmPass[len+1] = '\0';
-                                }
-                            }
-                            key = GetCharPressed();
-                        }
-                        
-                        if (IsKeyPressed(KEY_BACKSPACE)) {
-                            if (resetInputFocus == 0 && strlen(resetCurrentPass) > 0) resetCurrentPass[strlen(resetCurrentPass)-1] = '\0';
-                            else if (resetInputFocus == 1 && strlen(resetNewPass) > 0) resetNewPass[strlen(resetNewPass)-1] = '\0';
-                            else if (resetInputFocus == 2 && strlen(resetConfirmPass) > 0) resetConfirmPass[strlen(resetConfirmPass)-1] = '\0';
-                        }
-                        
-                        if (IsKeyPressed(KEY_TAB)) resetInputFocus = (resetInputFocus + 1) % 3;
-                    }
-
-                    // Submit and Cancel buttons
-                    float btnW = RW(0.12f);
-                    float btnH = RH(0.06f);
-                    float btnGap = RW(0.04f);
-                    Rectangle submitBtn = { modal.x + modalW/2.0f - btnW - btnGap/2.0f, modal.y + modalH - btnH - RH(0.03f), btnW, btnH };
-                    Rectangle cancelBtn = { modal.x + modalW/2.0f + btnGap/2.0f, modal.y + modalH - btnH - RH(0.03f), btnW, btnH };
-                    
-                    if (DrawButton(submitBtn, "Submit", colors.primary, colors, 18)) {
-                        // Verify current password
-                        bool currentPassValid = false;
-                        for (const auto& user : users) {
-                            if (user.name == currentUser && user.pass == resetCurrentPass) {
-                                currentPassValid = true;
-                                break;
-                            }
-                        }
-                        
-                        if (!currentPassValid) {
-                            resetMessage = "Current password is incorrect";
-                            resetFailed = true;
-                        }
-                        else if (strlen(resetNewPass) < 3) {
-                            resetMessage = "New password must be at least 3 characters";
-                            resetFailed = true;
-                        }
-                        else if (strcmp(resetNewPass, resetConfirmPass) != 0) {
-                            resetMessage = "New passwords do not match";
-                            resetFailed = true;
-                        }
-                        else {
-                            // Update password
-                            for (auto& user : users) {
-                                if (user.name == currentUser) {
-                                    user.pass = resetNewPass;
-                                    break;
-                                }
-                            }
-                            SaveAllUsers();
-                            resetMessage = "Password updated successfully";
-                            resetFailed = false;
-                            // Clear fields and return to options
-                            memset(resetCurrentPass, 0, sizeof(resetCurrentPass));
-                            memset(resetNewPass, 0, sizeof(resetNewPass));
-                            memset(resetConfirmPass, 0, sizeof(resetConfirmPass));
-                            showResetPasswordModal = false;
-                        }
-                    }
-                    
-                    if (DrawButton(cancelBtn, "Cancel", colors.buttonBg, colors, 18)) {
-                        memset(resetCurrentPass, 0, sizeof(resetCurrentPass));
-                        memset(resetNewPass, 0, sizeof(resetNewPass));
-                        memset(resetConfirmPass, 0, sizeof(resetConfirmPass));
-                        showResetPasswordModal = false; // Hide the modal
-                        resetMessage.clear();
-                        resetInputFocus = 0;
-                    }
-
-                    // Show message if any
-                    if (!resetMessage.empty()) {
-                        Color msgColor = resetFailed ? RED : GREEN;
-                        DrawTextScaled(resetMessage.c_str(), (int)(modal.x + (modalW - MeasureTextScaled(resetMessage.c_str(), 18))/2), (int)(modal.y + modalH - RH(0.12f)), 18, msgColor);
-                }
-            }
-        }
+  
+          }
  
-        EndDrawing();
+         EndDrawing();
     }
 
     // at exit, unload the font
