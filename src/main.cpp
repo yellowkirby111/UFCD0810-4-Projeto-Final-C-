@@ -517,6 +517,11 @@ int main() {
     // In-memory cart for currently logged user
     std::vector<std::pair<std::string,int>> currentCart;
 
+    // popup notification for actions like Add to Cart
+    static std::string cartPopupMsg = "";
+    static float cartPopupTimer = 0.0f;
+    const float cartPopupDur = 1.5f; // seconds
+
     // Add this near the top of main(), after InitWindow:
     Texture2D logo = LoadTexture("assets/logo.png");
 
@@ -1036,6 +1041,9 @@ int main() {
                             }
                             if (!found) currentCart.push_back({p.name, 1});
                             SaveCart(currentUser, currentCart);
+                            // show temporary popup notification
+                            cartPopupMsg = std::string("Added '") + p.name + "' to cart";
+                            cartPopupTimer = cartPopupDur;
                         }
                     }
                 }
@@ -1933,7 +1941,28 @@ int main() {
   
           }
  
-         EndDrawing();
+        // Update and draw transient popup notifications (non-blocking)
+        if (cartPopupTimer > 0.0f) {
+            cartPopupTimer -= GetFrameTime();
+            float alpha = std::max(0.0f, std::min(1.0f, cartPopupTimer / cartPopupDur));
+            if (!cartPopupMsg.empty() && alpha > 0.0f) {
+                // Draw a rounded rectangle-like box centered near bottom
+                int textW = MeasureTextScaled(cartPopupMsg.c_str(), 18);
+                int textH = ScaledFontSize(18);
+                float padX = RW(0.02f);
+                float padY = RH(0.01f);
+                float boxW = textW + padX * 2.0f;
+                float boxH = textH + padY * 2.0f;
+                float bx = (float)(centerX - boxW/2.0f);
+                float by = (float)(GetScreenHeight() - RH(0.10f));
+                Color bg = colors.primary; bg.a = (unsigned char)(255.0f * alpha * 0.95f);
+                DrawRectangleRec({bx, by, boxW, boxH}, bg);
+                DrawRectangleLinesEx({bx, by, boxW, boxH}, 2, Fade(colors.accent, alpha));
+                DrawTextScaled(cartPopupMsg.c_str(), (int)(bx + padX), (int)(by + padY/2.0f), 18, Fade(colors.text, alpha));
+            }
+        }
+
+        EndDrawing();
     }
 
     // at exit, unload the font
