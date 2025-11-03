@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_USER_MANAGEMENT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER,STATE_FORGOTPASSWORD, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_USER_MANAGEMENT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -642,6 +642,19 @@ int main() {
                 }
             }
 
+            float forgotBtnW = (float)RW(0.14f);
+            float forgotBtnH = (float)RH(0.04f);
+            Rectangle forgotBtn = { (float)(centerX) - forgotBtnW/2.0f + RX(0.1f), (float)RY(0.47f), forgotBtnW, forgotBtnH };
+            if (DrawButton(forgotBtn, "forgot password?", colors.background, colors, 16)) {
+                state = STATE_REGISTER;
+                strcpy(regUsername, "");
+                strcpy(regPassword, "");
+                strcpy(regConfirmPassword, "");
+                regInputFocus = 0;
+                regFailed = false;
+                regMessage = "";
+            }
+
             // Register button centered under inputs
             float registerBtnW = (float)RW(0.1875f);
             float registerBtnH = (float)RH(0.05f);
@@ -658,6 +671,10 @@ int main() {
 
             if (loginFailed)
                 DrawTextScaled("Login failed. Try again.", centerX - MeasureTextScaled("Login failed. Try again.", 20)/2, RY(0.85f), 20, RED);
+        }
+        else if (state == STATE_FORGOTPASSWORD) {
+            DrawTextScaled("Forgot Password", centerX - MeasureTextScaled("Forgot Password", 32)/2, RY(0.12f), 32, colors.primary);
+            DrawTextScaled("Feature not implemented.", centerX - MeasureTextScaled("Feature not implemented.", 20)/2, RY(0.4f), 20, colors.text);
         }
         else if (state == STATE_REGISTER) {
             DrawTextScaled("Register New User", centerX - MeasureTextScaled("Register New User", 32)/2, RY(0.12f), 32, colors.primary);
@@ -683,7 +700,26 @@ int main() {
             DrawRectangleRec(passwordRect, colors.inputBg);
             std::string passDisplay = regShowPassword ? regPassword : std::string(strlen(regPassword), '*');
             DrawTextScaled(passDisplay.c_str(), (int)passwordRect.x + 6, (int)passwordRect.y + 6, 20, colors.text);
-            if (regInputFocus == 1) DrawRectangleLinesEx(passwordRect, 2, colors.accent);
+            if (regInputFocus == 1) {
+                DrawRectangleLinesEx(passwordRect, 2, colors.accent);
+                
+                // Show password requirements
+                const char* passReq = "Password must have at least 8 characters, letters and numbers";
+                DrawTextScaled(passReq, (int)passwordRect.x, (int)(passwordRect.y + passwordRect.height + 4), 14, colors.accent);
+                
+                // Validate password strength
+                std::string pass = regPassword;
+                bool hasLetter = false;
+                bool hasNumber = false;
+                for(char c : pass) {
+                    if(isalpha(c)) hasLetter = true;
+                    if(isdigit(c)) hasNumber = true;
+                }
+                
+                if(pass.length() < 8 || !hasLetter || !hasNumber) {
+                    DrawRectangleLinesEx(passwordRect, 2, RED); // Show red border for invalid password
+                }
+            }
 
             // Confirm Password field
             Rectangle confirmRect = { (float)rInputX, (float)(rY + RH(0.161f)), (float)rInputW, inputH };
@@ -1930,16 +1966,214 @@ int main() {
              if (DrawButton(fsBtn, "Fullscreen", fsColor, colors, 20)) {
                  ApplyWindowMode(WM_FULLSCREEN);
              }
-  
+
+            Rectangle resetpwBtn = { RW(0.5) - (winBtnW/2), winBtnsY + RY(0.2), winBtnW, winBtnH };
+            if (DrawButton(resetpwBtn, "Reset Password", colors.buttonBg, colors, 18)) {
+                {
+                    // Show a blocking modal popup to reset a user's password.
+                    // We end the current frame, run a small modal loop, then continue the main loop.
+                    EndDrawing();
+
+                    std::string resetUser;
+                    bool modalOpen = true;
+                    bool inputFocus = false; // Changed to false initially
+
+                    while (!WindowShouldClose() && modalOpen) {
+                        BeginDrawing();
+                        ClearBackground(colors.background);
+
+                        // Dim background
+                        DrawRectangle(0, 0, sw, sh, Fade(BLACK, 0.45f));
+
+                        // Modal box
+                        Rectangle modal;
+                        modal.width = RW(0.5f);
+                        modal.height = RH(0.40f);
+                        modal.x = centerX - modal.width / 2.0f;
+                        modal.y = RY(0.22f);
+                        DrawRectangleRec(modal, Fade(colors.inputBg, 0.98f));
+                        DrawRectangleLinesEx(modal, 2, colors.accent);
+
+                        DrawTextScaled("Reset Password", (int)modal.x + 20, (int)modal.y + 16, 20, colors.primary);
+                        // Reset password for the currently logged in user.
+                        // Replace the old single-username input with three fields:
+                        // Old password, New password, Confirm new password.
+                        // Input fields layout
+                        Rectangle oldRect = { modal.x + 20, modal.y + 78, modal.width - 40, RH(0.06f) };
+                        Rectangle newRect = { modal.x + 20, modal.y + 78 + RH(0.08f), modal.width - 40, RH(0.06f) };
+                        Rectangle confRect = { modal.x + 20, modal.y + 78 + RH(0.16f), modal.width - 40, RH(0.06f) };
+
+                        // Persistent modal-local state
+                        static int focusIndex = 0; // 0 = old, 1 = new, 2 = confirm
+                        static std::string newPass;
+                        static std::string confirmPass;
+                        static std::string modalError;
+                        Vector2 mpos = GetMousePosition();
+
+                        // Draw boxes and labels
+                        DrawTextScaled("Old Password:", (int)oldRect.x, (int)oldRect.y - 20, 14, colors.text);
+                        DrawRectangleRec(oldRect, colors.inputBg);
+                        std::string oldMasked = std::string(resetUser.size(), '*');
+                        DrawTextScaled(oldMasked.c_str(), (int)oldRect.x + 6, (int)oldRect.y + 6, 18, colors.text);
+                        if (focusIndex == 0) DrawRectangleLinesEx(oldRect, 2, colors.accent);
+
+                        // Accept keyboard input for the Old Password field when it has focus.
+                        // Keep resetUser length limited to match other handling (63 chars).
+                        if (focusIndex == 0) {
+                            int c = GetCharPressed();
+                            while (c > 0) {
+                                if (c >= 32 && c <= 125 && resetUser.size() < 63) resetUser.push_back((char)c);
+                                c = GetCharPressed();
+                            }
+                            if (IsKeyPressed(KEY_BACKSPACE) && !resetUser.empty()) resetUser.pop_back();
+                        }
+                        // keep inputFocus in sync so other handlers (New/Confirm) behave correctly
+                        inputFocus = (focusIndex == 0);
+
+                        DrawTextScaled("New Password:", (int)newRect.x, (int)newRect.y - 20, 14, colors.text);
+                        DrawRectangleRec(newRect, colors.inputBg);
+                        std::string newMasked = std::string(newPass.size(), '*');
+                        DrawTextScaled(newMasked.c_str(), (int)newRect.x + 6, (int)newRect.y + 6, 18, colors.text);
+                        if (focusIndex == 1) DrawRectangleLinesEx(newRect, 2, colors.accent);
+
+                        DrawTextScaled("Confirm New Password:", (int)confRect.x, (int)confRect.y - 20, 14, colors.text);
+                        DrawRectangleRec(confRect, colors.inputBg);
+                        std::string confMasked = std::string(confirmPass.size(), '*');
+                        DrawTextScaled(confMasked.c_str(), (int)confRect.x + 6, (int)confRect.y + 6, 18, colors.text);
+                        if (focusIndex == 2) DrawRectangleLinesEx(confRect, 2, colors.accent);
+
+                        // Mouse click to focus fields
+                        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                            if (CheckCollisionPointRec(mpos, oldRect)) { 
+                                focusIndex = 0;
+                                inputFocus = true; // Set inputFocus when clicking old password field
+                            }
+                            else if (CheckCollisionPointRec(mpos, newRect)) { 
+                                focusIndex = 1;
+                                inputFocus = false;
+                            }
+                            else if (CheckCollisionPointRec(mpos, confRect)) { 
+                                focusIndex = 2;
+                                inputFocus = false;
+                            }
+                        }
+
+                        // Handle character input for New and Confirm fields here
+                        if (!inputFocus) { // Only handle these when not focused on old password
+                            int ch2 = GetCharPressed();
+                            while (ch2 > 0) {
+                                if (ch2 >= 32 && ch2 <= 125) {
+                                    if (focusIndex == 1 && newPass.size() < 128) newPass.push_back((char)ch2);
+                                    else if (focusIndex == 2 && confirmPass.size() < 128) confirmPass.push_back((char)ch2);
+                                }
+                                ch2 = GetCharPressed();
+                            }
+                            if (IsKeyPressed(KEY_BACKSPACE)) {
+                                if (focusIndex == 1 && !newPass.empty()) newPass.pop_back();
+                                else if (focusIndex == 2 && !confirmPass.empty()) confirmPass.pop_back();
+                            }
+                        }
+
+                        // Draw (and handle) buttons using the same positions the original code will use later
+                        Rectangle okBtnLocal = { modal.x + 20, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 10, RH(0.06f) };
+                        Rectangle cancelBtnLocal = { modal.x + modal.width * 0.55f + 6, modal.y + modal.height - RH(0.08f) - 12, modal.width * 0.45f - 10, RH(0.06f) };
+                        // We draw nothing here (the original code draws the buttons later), but we intercept clicks
+                        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                            if (CheckCollisionPointRec(mpos, okBtnLocal)) {
+                                // Validate and apply password change for the logged-in user
+                                modalError.clear();
+                                if (currentUser.empty()) {
+                                    modalError = "No user logged in.";
+                                } else {
+                                    // Find the user record
+                                    int ui = -1;
+                                    for (size_t i = 0; i < users.size(); ++i) if (users[i].name == currentUser) { ui = (int)i; break; }
+                                    if (ui < 0) modalError = "User record not found.";
+                                    else {
+                                        // resetUser currently holds the typed old password (from the existing keyboard handler)
+                                        if (resetUser != users[ui].pass) modalError = "Old password incorrect.";
+                                        else if (newPass.empty()) modalError = "New password required.";
+                                        else if (newPass != confirmPass) modalError = "New passwords do not match.";
+                                        else if (newPass.size() < 8) modalError = "New password must be at least 3 characters.";
+                                        else {
+                                            // Commit change
+                                            users[ui].pass = newPass;
+                                            SaveAllUsers();
+                                            // Prevent the original confirm-handler (which resets by username) from doing anything:
+                                            resetUser = "__handled__";
+                                            modalOpen = false;
+                                        }
+                                    }
+                                    // Clear password fields on failure but don't close modal
+                                    if (!modalError.empty()) {
+                                        newPass.clear();
+                                        confirmPass.clear();
+                                        resetUser.clear();
+                                        focusIndex = 0;
+                                    } else {
+                                        modalOpen = false; // Only close on success
+                                    }
+                                }
+                            } else if (CheckCollisionPointRec(mpos, cancelBtnLocal)) {
+                                // Cancel: just close modal and neutralize original handler
+                                resetUser = "__handled__";
+                                modalOpen = false;
+                            }
+                        }
+
+                        // Show any validation error
+                        if (!modalError.empty()) {
+                            DrawTextScaled(modalError.c_str(), (int)modal.x + 20, (int)(confRect.y + confRect.height + RH(0.02f)), 14, ORANGE);
+                        }
+
+                        // Keyboard input for the username field
+                        if (inputFocus) {
+                            int c = GetCharPressed();
+                            while (c > 0) {
+                                if (c >= 32 && c <= 125 && resetUser.size() < 63) resetUser.push_back((char)c);
+                                c = GetCharPressed();
+                            }
+                            if (IsKeyPressed(KEY_BACKSPACE) && !resetUser.empty()) resetUser.pop_back();
+                        }
+
+                        // Buttons
+                        Rectangle okBtn = { modal.x + 20, modal.y + modal.height - RH(0.075f), modal.width * 0.45f - 10, RH(0.06f) };
+                        Rectangle cancelBtn = { modal.x + modal.width * 0.55f, modal.y + modal.height - RH(0.075f), modal.width * 0.45f - 10, RH(0.06f) };
+
+                        if (DrawButton(okBtn, "Confirm", colors.primary, colors, 18)) {
+                            // Basic reset action: set password to "1234" for the matched user (admins preserved).
+                            bool found = false;
+                            for (auto &u : users) {
+                                if (u.name == resetUser) {
+                                    u.pass = "1234";
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (found) SaveAllUsers();
+                            modalOpen = false;
+                        }
+                        if (DrawButton(cancelBtn, "Cancel", colors.buttonBg, colors, 18)) {
+                            modalOpen = false;
+                        }
+
+                        EndDrawing();
+                    }
+
+                    // After closing modal, continue main loop (skip the rest of this frame)
+                    continue;
+                }
+            }
           }
  
          EndDrawing();
     }
-
+    
     // at exit, unload the font
     UnloadFont(gFont);
     UnloadTexture(logo);
     CloseWindow();
     std::cout << "Exiting application." << std::endl;
     return 0;
+    
 }

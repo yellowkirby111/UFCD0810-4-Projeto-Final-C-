@@ -3,3 +3,4 @@ user:password
 alex:sigma2
 alex2:sigma
 danny:1234
+alex3:password1
