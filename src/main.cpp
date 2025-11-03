@@ -1125,53 +1125,11 @@ int main() {
                     if (!sizeInput.empty() && sizeInput == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, colors.accent);
                 }
 
-                // Load product input (for editing existing products)
-                Rectangle removeRect = { inputX, descY + descH_add + gapV, fullW * 0.6f, inputH };
-                // Remove input
-                DrawTextScaled("Remove product:", labelX, (int)removeRect.y + 6, 20, colors.text);
-                DrawRectangleRec(removeRect, colors.inputBg);
-                DrawTextScaled(removeInput.c_str(), (int)removeRect.x + 8, (int)removeRect.y + 6, 18, colors.text);
-                if (activeFieldAdd == 2) DrawRectangleLinesEx(removeRect, 2, colors.accent);
-
-                // Small Load button to fetch an existing product by name into the form for editing
-                float loadW = RW(0.12f);
-                Rectangle loadBtn = { removeRect.x + removeRect.width + RW(0.02f), removeRect.y, loadW, removeRect.height };
-                if (DrawButton(loadBtn, "Load", colors.buttonBg, colors, 16)) {
-                    // Ensure products are loaded
-                    if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); }
-                    editingIndex = -1;
-                    std::string target = removeInput;
-                    auto toLower = [](const std::string &s){ std::string out=s; std::transform(out.begin(), out.end(), out.begin(), ::tolower); return out; };
-                    std::string targetL = toLower(target);
-                    for (size_t i = 0; i < products.size(); ++i) {
-                        std::string nameL = toLower(products[i].name);
-                        if (nameL == targetL) {
-                            // populate form
-                            nameInput = products[i].name;
-                            if (products[i].hasPrice) {
-                                std::ostringstream ss; ss.setf(std::ios::fixed); ss.precision(2); ss << products[i].price; priceInput = ss.str();
-                            } else priceInput.clear();
-                            sizeInput = products[i].size;
-                            // map sex token to selectedCategoryAdd
-                            std::string sex = products[i].sex; std::transform(sex.begin(), sex.end(), sex.begin(), ::tolower);
-                            if (sex == "m") selectedCategoryAdd = 1;
-                            else if (sex == "w") selectedCategoryAdd = 2;
-                            else if (sex == "k") selectedCategoryAdd = 3;
-                            else if (sex == "b") selectedCategoryAdd = 4;
-                            else selectedCategoryAdd = 0;
-                            editingIndex = (int)i;
-                            msg = "Loaded product for edit: " + products[i].name;
-                            break;
-                        }
-                    }
-                    if (editingIndex == -1) msg = "No product with that name found";
-                }
 
                 // Click-to-focus
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                     if (CheckCollisionPointRec(mouse, nameRect)) activeFieldAdd = 0;
                     else if (CheckCollisionPointRec(mouse, priceRect)) activeFieldAdd = 1;
-                    else if (CheckCollisionPointRec(mouse, removeRect)) activeFieldAdd = 2;
                     else if (CheckCollisionPointRec(mouse, saleRect)) activeFieldAdd = 3;
                     else activeFieldAdd = 0;
                 }
