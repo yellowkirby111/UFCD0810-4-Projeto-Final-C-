@@ -651,7 +651,7 @@ int main() {
             float forgotBtnH = (float)RH(0.04f);
             Rectangle forgotBtn = { (float)(centerX) - forgotBtnW/2.0f + RX(0.1f), (float)RY(0.47f), forgotBtnW, forgotBtnH };
             if (DrawButton(forgotBtn, "forgot password?", colors.background, colors, 16)) {
-                state = STATE_REGISTER;
+                state = STATE_FORGOTPASSWORD;
                 strcpy(regUsername, "");
                 strcpy(regPassword, "");
                 strcpy(regConfirmPassword, "");
@@ -679,7 +679,208 @@ int main() {
         }
         else if (state == STATE_FORGOTPASSWORD) {
             DrawTextScaled("Forgot Password", centerX - MeasureTextScaled("Forgot Password", 32)/2, RY(0.12f), 32, colors.primary);
-            DrawTextScaled("Feature not implemented.", centerX - MeasureTextScaled("Feature not implemented.", 20)/2, RY(0.4f), 20, colors.text);
+            DrawTextScaled("Please enter your username below and we'll email you a reset code.", centerX - MeasureTextScaled("Please enter your username below and we'll email you a reset code.", 18)/2, RY(0.22f), 18, colors.text);
+            
+            static char forgotUser[32] = "";
+            static bool emailSent = false;
+            static bool codeEntered = false;
+            static char verifyCode[8] = "";
+            static bool forgotFocus = false;
+            static bool codeFocus = false;
+            
+            if (!emailSent) {
+                // Username input
+                float inputY = RY(0.32f);
+                Rectangle userRect = { (float)(centerX - RW(0.25f)), inputY, (float)RW(0.5f), (float)RH(0.06f) };
+                DrawRectangleRec(userRect, colors.inputBg);
+                DrawTextScaled(forgotUser, (int)userRect.x + 6, (int)userRect.y + 6, 20, colors.text);
+                if (forgotFocus) DrawRectangleLinesEx(userRect, 2, colors.accent);
+                
+                // Handle input focus
+                Vector2 mouse = GetMousePosition();
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    forgotFocus = CheckCollisionPointRec(mouse, userRect);
+                }
+                
+                if (forgotFocus) {
+                    int key = GetCharPressed();
+                    while (key > 0) {
+                        if (key >= 32 && key <= 125 && strlen(forgotUser) < 31) {
+                            int len = strlen(forgotUser);
+                            forgotUser[len] = (char)key;
+                            forgotUser[len+1] = '\0';
+                        }
+                        key = GetCharPressed();
+                    }
+                    if (IsKeyPressed(KEY_BACKSPACE) && strlen(forgotUser) > 0) {
+                        forgotUser[strlen(forgotUser)-1] = '\0';
+                    }
+                }
+                
+                // Send code button
+                Rectangle sendBtn = { (float)(centerX - RW(0.15f)), inputY + RH(0.08f), (float)RW(0.3f), (float)RH(0.06f) };
+                if (DrawButton(sendBtn, "Send Reset Code", colors.primary, colors, 20)) {
+                    if (strlen(forgotUser) > 0) {
+                        emailSent = true;
+                        DrawTextScaled("Sending email...", centerX - MeasureTextScaled("Sending email...", 18)/2, (int)(sendBtn.y + sendBtn.height + 10), 18, colors.text);
+                    }
+                }
+            }
+            else if (!codeEntered) {
+                // Show verification code input
+                DrawTextScaled("Enter the verification code sent to your email:", centerX - MeasureTextScaled("Enter the verification code sent to your email:", 18)/2, RY(0.32f), 18, colors.text);
+                
+                float codeY = RY(0.38f);
+                Rectangle codeRect = { (float)(centerX - RW(0.15f)), codeY, (float)RW(0.3f), (float)RH(0.06f) };
+                DrawRectangleRec(codeRect, colors.inputBg);
+                DrawTextScaled(verifyCode, (int)codeRect.x + 6, (int)codeRect.y + 6, 20, colors.text);
+                if (codeFocus) DrawRectangleLinesEx(codeRect, 2, colors.accent);
+                
+                // Handle code input
+                Vector2 mouse = GetMousePosition();
+                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                    codeFocus = CheckCollisionPointRec(mouse, codeRect);
+                }
+                
+                if (codeFocus) {
+                    int key = GetCharPressed();
+                    while (key > 0) {
+                        if (key >= 32 && key <= 125 && strlen(verifyCode) < 7) {
+                            int len = strlen(verifyCode);
+                            verifyCode[len] = (char)key;
+                            verifyCode[len+1] = '\0';
+                        }
+                        key = GetCharPressed();
+                    }
+                    if (IsKeyPressed(KEY_BACKSPACE) && strlen(verifyCode) > 0) {
+                        verifyCode[strlen(verifyCode)-1] = '\0';
+                    }
+                }
+                
+                // Verify button
+                Rectangle verifyBtn = { (float)(centerX - RW(0.15f)), codeY + RH(0.08f), (float)RW(0.3f), (float)RH(0.06f) };
+                if (DrawButton(verifyBtn, "Verify Code", colors.primary, colors, 20)) {
+                    if (strlen(verifyCode) > 0) {
+                        // Any code works
+                        codeEntered = true;
+                        // Show a password reset form
+                        static std::string newPassword;
+                        static std::string newPasswordInput;
+                        static bool resetPasswordFormOpen = true;
+                        static bool newPasswordInputFocus = false;
+                        static std::string resetError;
+
+                        if (resetPasswordFormOpen) {
+                            // Show password input form
+                            float resetY = RY(0.44f);
+                            Rectangle resetPassRect = { RX(0.3f), resetY, RW(0.4f), RH(0.06f) };
+                            DrawTextScaled("Enter new password:", RX(0.2f), resetY - RH(0.03f), 18, colors.text);
+                            DrawRectangleRec(resetPassRect, colors.inputBg);
+                            std::string maskedPass = std::string(newPassword.size(), '*');
+                            DrawTextScaled(maskedPass.c_str(), (int)resetPassRect.x + 6, (int)resetPassRect.y + 6, 18, colors.text);
+                            if (newPasswordInputFocus) DrawRectangleLinesEx(resetPassRect, 2, colors.accent);
+
+                            // Click to focus password field
+                            Vector2 mousePos = GetMousePosition();
+                            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                                newPasswordInputFocus = CheckCollisionPointRec(mousePos, resetPassRect);
+                            }
+
+                            // Handle keyboard input
+                            if (newPasswordInputFocus) {
+                                int key = GetCharPressed();
+                                while (key > 0) {
+                                    if (key >= 32 && key <= 125 && newPassword.size() < 128) {
+                                        newPassword.push_back((char)key);
+                                    }
+                                    key = GetCharPressed();
+                                }
+                                if (IsKeyPressed(KEY_BACKSPACE) && !newPassword.empty()) {
+                                    newPassword.pop_back();
+                                }
+                            }
+
+                            // Confirm button
+                            Rectangle confirmResetBtn = { RX(0.4f), resetY + RH(0.08f), RW(0.2f), RH(0.06f) };
+                            if (DrawButton(confirmResetBtn, "Set Password", colors.primary, colors, 18)) {
+                                // Add input for new password before setting it
+                                static std::string newPasswordInput;
+                                static bool newPassInputFocus = false;
+
+                                if (newPasswordInput.empty()) {
+                                    resetError = "Please enter a new password";
+                                } else if (newPasswordInput.length() < 3) {
+                                    resetError = "Password must be at least 3 characters";
+                                } else {
+                                    // Set the new password from user input
+                                    for (auto &u : users) {
+                                        if (u.name == std::string(forgotUser)) {
+                                            u.pass = newPasswordInput;
+                                            SaveAllUsers();
+                                            resetPasswordFormOpen = false;
+                                            newPasswordInput.clear();
+                                            newPassInputFocus = false;
+                                            codeEntered = true; // Move to success screen
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // Handle password input
+                                if (newPassInputFocus) {
+                                    int key = GetCharPressed();
+                                    while (key > 0) {
+                                        if (key >= 32 && key <= 125) {
+                                            newPasswordInput += (char)key;
+                                        }
+                                        key = GetCharPressed();
+                                    }
+                                    if (IsKeyPressed(KEY_BACKSPACE) && !newPasswordInput.empty()) {
+                                        newPasswordInput.pop_back();
+                                    }
+                                }
+                            }
+
+                            // Draw password input field
+                            Rectangle passRect = { resetY - RH(0.08f), RY(0.35f), RW(0.3f), RH(0.06f) };
+                            DrawRectangleRec(passRect, colors.inputBg);
+                            DrawTextScaled("New Password:", (int)(passRect.x), (int)(passRect.y - RH(0.03f)), 16, colors.text);
+                            std::string maskedPassNew(newPasswordInput.length(), '*');
+                            DrawTextScaled(maskedPass.c_str(), (int)(passRect.x + 5), (int)(passRect.y + 5), 18, colors.text);
+
+                            // Handle input focus
+                            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                                Vector2 mousePos = GetMousePosition();
+                                newPasswordInputFocus = CheckCollisionPointRec(mousePos, passRect);
+                            }
+                            if (newPassInputFocus) {
+                                DrawRectangleLinesEx(passRect, 2, colors.accent);
+                            }
+
+                            // Show any error
+                            if (!resetError.empty()) {
+                                DrawTextScaled(resetError.c_str(), RX(0.3f), resetY + RH(0.16f), 16, RED);
+                            }
+                        }
+                    }
+                }
+            }
+            else {
+                // Show success message
+                DrawTextScaled("Password has been reset successfully", centerX - MeasureTextScaled("Password has been reset successfully", 20)/2, RY(0.35f), 20, GREEN);
+                DrawTextScaled("Please login with your new password", centerX - MeasureTextScaled("Please login with your new password", 18)/2, RY(0.42f), 18, colors.text);
+                
+                Rectangle okBtn = { (float)(centerX - RW(0.15f)), RY(0.50f), (float)RW(0.3f), (float)RH(0.06f) };
+                if (DrawButton(okBtn, "Return to Login", colors.primary, colors, 20)) {
+                    state = STATE_LOGIN;
+                    emailSent = false;
+                    codeEntered = false;
+                    memset(forgotUser, 0, sizeof(forgotUser));
+                    memset(verifyCode, 0, sizeof(verifyCode));
+                    forgotFocus = false;
+                    codeFocus = false;
+                }
+            }
         }
         else if (state == STATE_REGISTER) {
             DrawTextScaled("Register New User", centerX - MeasureTextScaled("Register New User", 32)/2, RY(0.12f), 32, colors.primary);
