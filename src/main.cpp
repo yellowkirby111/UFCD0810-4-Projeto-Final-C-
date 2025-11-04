@@ -853,9 +853,6 @@ int main() {
                                 Vector2 mousePos = GetMousePosition();
                                 newPasswordInputFocus = CheckCollisionPointRec(mousePos, passRect);
                             }
-                            if (newPassInputFocus) {
-                                DrawRectangleLinesEx(passRect, 2, colors.accent);
-                            }
 
                             // Show any error
                             if (!resetError.empty()) {
@@ -1915,12 +1912,7 @@ int main() {
                     lineY += 20;
                 }
 
-                // Debug overlay: show focus and input state to help diagnose why typing may not register
-                {
-                    bool mouseInDesc = CheckCollisionPointRec(mousePos, descRect);
-                    std::ostringstream dbg; dbg << "descFocus=" << (descFocus?"1":"0") << " editFieldFocus=" << editFieldFocus << " descLen=" << editDescription.size() << " mouseInDesc=" << (mouseInDesc?"1":"0");
-                    DrawTextScaled(dbg.str().c_str(), (int)inputX, (int)(descRect.y + descRect.height + 8), 14, colors.accent);
-                }
+
 
                 // Draw focus border for description (after the rect/content so it remains visible)
                 if (descFocus) DrawRectangleLinesEx(descRect, 2, colors.accent);
