@@ -237,7 +237,7 @@ int main() {
     std::string regMessage = "";
 
     // Products storage
-    struct Product { std::string name; double price; bool hasPrice; double salePercent; bool hasSale; std::string size; std::string fabric; std::string sex; std::string description; int fileIndex; };
+    struct Product { std::string name; double price; bool hasPrice; double salePercent; bool hasSale; std::string size; std::string fabric; std::string sex; std::string type; std::string description; int fileIndex; };
     std::vector<Product> products;
     std::vector<Product> filteredProducts; // For search/sort results
     bool productsLoaded = false;
@@ -281,14 +281,27 @@ int main() {
             std::string sizeStr = tokens.size() > 2 ? tokens[2] : std::string();
             std::string fabricStr;
             std::string sexStr;
+            std::string typeStr;
             std::string descStr;
             double salePercent = 0.0;
             bool hasSale = false;
             // Support both old and new formats. Preferred new format:
-            // name;price;size;fabric;sex;description (description may contain ';')
-            if (tokens.size() >= 7) {
+            // Preferred new canonical format:
+            // name;price;size;fabric;sex;type;sale;description  (description may contain ';')
+            if (tokens.size() >= 8) {
                 fabricStr = tokens[3];
                 sexStr = tokens[4];
+                typeStr = tokens[5];
+                std::string saleStr = tokens[6];
+                descStr = tokens[7];
+                for (size_t i = 8; i < tokens.size(); ++i) descStr += ";" + tokens[i];
+                try { salePercent = std::stod(saleStr); hasSale = true; } catch(...) { hasSale = false; salePercent = 0.0; }
+            } else if (tokens.size() == 7) {
+                // older canonical format without explicit type: name;price;size;fabric;sex;sale;description
+                fabricStr = tokens[3];
+                sexStr = tokens[4];
+                // no explicit type available in this file line
+                typeStr = std::string();
                 std::string saleStr = tokens[5];
                 descStr = tokens[6];
                 for (size_t i = 7; i < tokens.size(); ++i) descStr += ";" + tokens[i];
@@ -297,6 +310,7 @@ int main() {
                 // ambiguous: token[5] might be sale or description. Detect numeric -> sale, otherwise description
                 fabricStr = tokens[3];
                 sexStr = tokens[4];
+                typeStr = std::string();
                 std::string t5 = tokens[5];
                 bool looksNumeric = !t5.empty();
                 for (char c : t5) if (!(isdigit((unsigned char)c) || c=='.' || c=='-' )) { looksNumeric = false; break; }
@@ -310,9 +324,11 @@ int main() {
                 // name;price;size;fabric;description  (no sex provided)
                 fabricStr = tokens[3];
                 descStr = tokens[4];
+                typeStr = std::string();
             } else if (tokens.size() == 4) {
                 // older format: name;price;size;description
                 descStr = tokens[3];
+                typeStr = std::string();
             }
 
             double price = 0.0;
@@ -326,7 +342,7 @@ int main() {
                     ok = true;
                 } catch (...) { ok = false; }
             }
-            products.push_back({ name, price, ok, salePercent, hasSale, sizeStr, fabricStr, sexStr, descStr, lineIndex });
+            products.push_back({ name, price, ok, salePercent, hasSale, sizeStr, fabricStr, sexStr, typeStr, descStr, lineIndex });
             ++lineIndex;
         }
 
@@ -392,39 +408,47 @@ int main() {
 
             // Filter by product type if set (selectedProductType: 0=All,1=Clothing,2=Accessories,3=Shoes)
             if (selectedProductType != 0) {
-                std::string nameLower = product.name; std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
-                std::string descLower = product.description; std::transform(descLower.begin(), descLower.end(), descLower.begin(), ::tolower);
+                // If the product has an explicit type token, prefer that. Otherwise fallback to keyword heuristics.
                 bool typeMatch = false;
-                if (selectedProductType == 1) {
-                    // Clothing keywords
-                    static const std::vector<std::string> clothes = {"shirt","t-shirt","camiseta","dress","pants","calca","blouse","blusa","jeans","jacket","casaco","roupa","hoodie","sweater","shorts","bermuda","trousers","calças"};
-                    for (const auto &kw : clothes) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
-                } else if (selectedProductType == 2) {
-                    // Accessories keywords
-                    static const std::vector<std::string> acc = {"hat","cap","cinto","belt","scarf","cachecol","bag","bolsa","mochila","sunglass","oculos","oculos","jewelry","bijuteria","accessory","acessorio"};
-                    for (const auto &kw : acc) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
-                    // If accessory subcategory is selected, additionally require a subcategory keyword match
-                    if (typeMatch && selectedAccessoryCategory != 0) {
-                        bool subMatch = false;
-                        if (selectedAccessoryCategory == 1) { // Bags
-                            static const std::vector<std::string> bags = {"bag","bolsa","mochila","sacola","purse"};
-                            for (const auto &kw : bags) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
-                        } else if (selectedAccessoryCategory == 2) { // Jewelry
-                            static const std::vector<std::string> jewels = {"jewel","jewelry","bijuteria","bracelet","ring","necklace","colar"};
-                            for (const auto &kw : jewels) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
-                        } else if (selectedAccessoryCategory == 3) { // Hats
-                            static const std::vector<std::string> hats = {"hat","cap","boné","boné","beanie"};
-                            for (const auto &kw : hats) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
-                        } else if (selectedAccessoryCategory == 4) { // Belts
-                            static const std::vector<std::string> belts = {"belt","cinto"};
-                            for (const auto &kw : belts) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                if (!product.type.empty()) {
+                    std::string t = product.type; std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+                    if (selectedProductType == 1) typeMatch = (t == "c");
+                    else if (selectedProductType == 2) typeMatch = (t == "a");
+                    else if (selectedProductType == 3) typeMatch = (t == "s");
+                } else {
+                    std::string nameLower = product.name; std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+                    std::string descLower = product.description; std::transform(descLower.begin(), descLower.end(), descLower.begin(), ::tolower);
+                    if (selectedProductType == 1) {
+                        // Clothing keywords
+                        static const std::vector<std::string> clothes = {"shirt","t-shirt","camiseta","dress","pants","calca","blouse","blusa","jeans","jacket","casaco","roupa","hoodie","sweater","shorts","bermuda","trousers","calças"};
+                        for (const auto &kw : clothes) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
+                    } else if (selectedProductType == 2) {
+                        // Accessories keywords
+                        static const std::vector<std::string> acc = {"hat","cap","cinto","belt","scarf","cachecol","bag","bolsa","mochila","sunglass","oculos","jewelry","bijuteria","accessory","acessorio"};
+                        for (const auto &kw : acc) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
+                        // If accessory subcategory is selected, additionally require a subcategory keyword match
+                        if (typeMatch && selectedAccessoryCategory != 0) {
+                            bool subMatch = false;
+                            if (selectedAccessoryCategory == 1) { // Bags
+                                static const std::vector<std::string> bags = {"bag","bolsa","mochila","sacola","purse"};
+                                for (const auto &kw : bags) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            } else if (selectedAccessoryCategory == 2) { // Jewelry
+                                static const std::vector<std::string> jewels = {"jewel","jewelry","bijuteria","bracelet","ring","necklace","colar"};
+                                for (const auto &kw : jewels) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            } else if (selectedAccessoryCategory == 3) { // Hats
+                                static const std::vector<std::string> hats = {"hat","cap","boné","beanie"};
+                                for (const auto &kw : hats) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            } else if (selectedAccessoryCategory == 4) { // Belts
+                                static const std::vector<std::string> belts = {"belt","cinto"};
+                                for (const auto &kw : belts) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            }
+                            if (!subMatch) typeMatch = false;
                         }
-                        if (!subMatch) typeMatch = false;
+                    } else if (selectedProductType == 3) {
+                        // Shoes keywords
+                        static const std::vector<std::string> shoes = {"shoe","shoes","sapato","sneaker","tenis","boot","bota","sandalia","sapatilha","sapatinho","tênis"};
+                        for (const auto &kw : shoes) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
                     }
-                } else if (selectedProductType == 3) {
-                    // Shoes keywords
-                    static const std::vector<std::string> shoes = {"shoe","shoes","sapato","sneaker","tenis","boot","bota","sandalia","sapatilha","sapatinho","tênis"};
-                    for (const auto &kw : shoes) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
                 }
                 if (!typeMatch) continue;
             }
@@ -1110,7 +1134,7 @@ int main() {
             DrawTextScaled("Pepka", pepkaX, RY(0.25f), 60, colors.primary);
             DrawTextureEx(logo, logoPos, 0.0f, logoScale, WHITE);
 
-            // Menu buttons stack (aligned vertically with consistent spacing)
+            // Men ligned vertically with consistent spacing)
             float menuBaseY = RY(0.52f);
             float menuSpacing = RH(0.12f);
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)menuBaseY, (float)RW(0.25f), (float)RH(0.1f) };
@@ -1429,12 +1453,28 @@ int main() {
 
                 // Category selection (M/W/K/B) placed to the right of Price (label removed)
                 static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
+                static int selectedTypeAdd = 0; // 0=none,1=Clothing(C),2=Accessories(A),3=Shoes(S)
                 const std::vector<std::string> catLabels = {"M","W","K","B"};
                 for (size_t ci = 0; ci < catLabels.size(); ++ci) {
                     Rectangle cb = { catX + ci * (catBtnW + catGap), priceRect.y + (priceRect.height - catBtnH)/2.0f, catBtnW, catBtnH };
                     if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) selectedCategoryAdd = (int)ci + 1;
                     if (selectedCategoryAdd == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
                 }
+
+                // Type selection (C/A/S)
+                float typeLabelX = catX;
+                float typeY = priceRect.y + priceRect.height + RH(0.02f);
+                DrawTextScaled("Type:", labelX, (int)typeY + 6, 20, colors.text);
+                float tbtnW = RW(0.12f), tbtnH = inputH * 0.9f, tgap = RW(0.02f);
+                Rectangle tC = { inputX, typeY, tbtnW, tbtnH };
+                Rectangle tA = { inputX + (tbtnW + tgap), typeY, tbtnW, tbtnH };
+                Rectangle tS = { inputX + 2*(tbtnW + tgap), typeY, tbtnW, tbtnH };
+                if (DrawButton(tC, "Clothing", colors.buttonBg, colors, 16)) selectedTypeAdd = 1;
+                if (DrawButton(tA, "Accessories", colors.buttonBg, colors, 16)) selectedTypeAdd = 2;
+                if (DrawButton(tS, "Shoes", colors.buttonBg, colors, 16)) selectedTypeAdd = 3;
+                if (selectedTypeAdd == 1) DrawRectangleLinesEx(tC, 3, colors.accent);
+                if (selectedTypeAdd == 2) DrawRectangleLinesEx(tA, 3, colors.accent);
+                if (selectedTypeAdd == 3) DrawRectangleLinesEx(tS, 3, colors.accent);
 
                 // Size selection — buttons centered inside sizeAreaRect
                 DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 24, colors.text);
@@ -1512,8 +1552,13 @@ int main() {
                         else sexToken = std::string();
                         std::string descToken = std::string();
                         std::ostringstream newline;
-                        // format: name;price;size;fabric;sex;sale;description
-                        newline << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string((int)sp) : "0") << ";" << descToken;
+                        // canonical format: name;price;size;fabric;sex;type;sale;description
+                        std::string typeToken;
+                        if (selectedTypeAdd == 1) typeToken = "C";
+                        else if (selectedTypeAdd == 2) typeToken = "A";
+                        else if (selectedTypeAdd == 3) typeToken = "S";
+                        else typeToken = std::string();
+                        newline << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << typeToken << ";" << (okSale ? std::to_string((int)sp) : "0") << ";" << descToken;
 
                         if (editingIndex >= 0) {
                             // update existing by index (same logic)...
@@ -1779,6 +1824,7 @@ int main() {
                 // Form fields (populate from products[editProductIndex])
                 static std::string editName, editPrice, editSize, editSale; // Added editSale here
                 static int editCategory = 0;
+                static int editType = 0; // 0=none,1=C,2=A,3=S
                 static bool populated = false;
                 static std::string editDescription = "";
                 static std::string origEditName = "";
@@ -1795,6 +1841,9 @@ int main() {
                         std::ostringstream ssp; ssp << (int)p.salePercent;
                         editSale = ssp.str();
                     } else editSale.clear();
+                    // populate type selection
+                    std::string t = p.type; std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+                    if (t == "c") editType = 1; else if (t == "a") editType = 2; else if (t == "s") editType = 3; else editType = 0;
                     // remember original name for safer name-based replacement
                     origEditName = p.name;
                     populated = true;
@@ -1839,6 +1888,20 @@ int main() {
                     if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) editCategory = (int)ci + 1;
                     if (editCategory == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
                 }
+
+                // Type selection (C/A/S) in edit form
+                float typeY = priceRect.y + priceRect.height + RH(0.02f);
+                DrawTextScaled("Type:", labelX, (int)typeY + 6, 18, colors.text);
+                float tbtnW = RW(0.12f), tbtnH = inputH * 0.9f, tgap = RW(0.02f);
+                Rectangle tC = { inputX, typeY, tbtnW, tbtnH };
+                Rectangle tA = { inputX + (tbtnW + tgap), typeY, tbtnW, tbtnH };
+                Rectangle tS = { inputX + 2*(tbtnW + tgap), typeY, tbtnW, tbtnH };
+                if (DrawButton(tC, "Clothing", colors.buttonBg, colors, 16)) editType = 1;
+                if (DrawButton(tA, "Accessories", colors.buttonBg, colors, 16)) editType = 2;
+                if (DrawButton(tS, "Shoes", colors.buttonBg, colors, 16)) editType = 3;
+                if (editType == 1) DrawRectangleLinesEx(tC, 3, colors.accent);
+                if (editType == 2) DrawRectangleLinesEx(tA, 3, colors.accent);
+                if (editType == 3) DrawRectangleLinesEx(tS, 3, colors.accent);
 
                 // Size selection — buttons centered inside sizeAreaRect
                 DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
@@ -1936,9 +1999,14 @@ int main() {
                         std::string sexToken;
                         if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
 
-                        // Build new product line using canonical format: name;price;size;fabric;sex;sale;description
+                        // Build new product line using canonical format: name;price;size;fabric;sex;type;sale;description
                         std::ostringstream newline;
-                        newline << editName << ";" << editPrice << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string(salePercentVal) : "0") << ";" << editDescription;
+                        std::string typeToken;
+                        if (editType == 1) typeToken = "C";
+                        else if (editType == 2) typeToken = "A";
+                        else if (editType == 3) typeToken = "S";
+                        else typeToken = std::string();
+                        newline << editName << ";" << editPrice << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << typeToken << ";" << (okSale ? std::to_string(salePercentVal) : "0") << ";" << editDescription;
                         std::string newLine = newline.str();
 
                         bool replaced = false;
