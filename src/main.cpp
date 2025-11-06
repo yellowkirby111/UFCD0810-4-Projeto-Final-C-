@@ -17,7 +17,7 @@ enum AppState { STATE_LOGIN, STATE_REGISTER,STATE_FORGOTPASSWORD, STATE_MENU, ST
 #define DARK_PRIMARY (Color){138, 43, 226, 255}       // Blue-violet purple
 #define DARK_SECONDARY (Color){75, 0, 130, 255}       // Indigo purple
 #define DARK_ACCENT (Color){221, 160, 221, 255}       // Plum (light purple)
-#define DARK_TEXT (Color){240, 240, 240, 255}         // Light gray text
+#define DARK_TEXT WHITE         // White text for dark theme
 #define DARK_INPUT_BG (Color){40, 40, 40, 255}        // Dark gray for inputs
 #define DARK_BUTTON_BG (Color){60, 60, 60, 255}       // Medium gray for buttons
 
@@ -650,7 +650,14 @@ int main() {
             float forgotBtnW = (float)RW(0.14f);
             float forgotBtnH = (float)RH(0.04f);
             Rectangle forgotBtn = { (float)(centerX) - forgotBtnW/2.0f + RX(0.1f), (float)RY(0.47f), forgotBtnW, forgotBtnH };
-            if (DrawButton(forgotBtn, "forgot password?", colors.background, colors, 16)) {
+            Vector2 mouse = GetMousePosition();
+            bool hovered = CheckCollisionPointRec(mouse, forgotBtn);
+            Color color = hovered ? Fade(colors.background, 0.8f) : colors.background;
+            DrawRectangleRec(forgotBtn, color);
+            int textWidth = MeasureTextScaled("forgot password?", 16);
+            int textHeight = ScaledFontSize(16);
+            DrawTextScaled("forgot password?", (int)(forgotBtn.x + (forgotBtn.width - textWidth) / 2), (int)(forgotBtn.y + (forgotBtn.height - textHeight) / 2), 16, colors.primary);
+            if (hovered && IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
                 state = STATE_FORGOTPASSWORD;
                 strcpy(regUsername, "");
                 strcpy(regPassword, "");
@@ -695,7 +702,7 @@ int main() {
             if (!emailSent) {
                 // Username input
                 float inputY = RY(0.32f);
-                Rectangle userRect = { (float)(centerX - RW(0.25f)), inputY, (float)RW(0.5f), (float)RH(0.06f) };
+                Rectangle userRect = { (float)(centerX - RW(0.1f)), inputY, (float)RW(0.2f), (float)RH(0.06f) };
                 DrawRectangleRec(userRect, colors.inputBg);
                 DrawTextScaled(forgotUser, (int)userRect.x + 6, (int)userRect.y + 6, 20, colors.text);
                 if (forgotFocus) DrawRectangleLinesEx(userRect, 2, colors.accent);
@@ -2277,7 +2284,7 @@ int main() {
                                         if (resetUser != users[ui].pass) modalError = "Old password incorrect.";
                                         else if (newPass.empty()) modalError = "New password required.";
                                         else if (newPass != confirmPass) modalError = "New passwords do not match.";
-                                        else if (newPass.size() < 8) modalError = "New password must be at least 3 characters.";
+                                        else if (newPass.size() < 8) modalError = "New password must be at least 8 characters.";
                                         else {
                                             // Commit change
                                             users[ui].pass = newPass;
