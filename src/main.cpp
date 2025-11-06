@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cstring>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER,STATE_FORGOTPASSWORD, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_USER_MANAGEMENT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER,STATE_FORGOTPASSWORD, STATE_MENU, STATE_PRODUCT_TYPE, STATE_CATALOG, STATE_CATALOG_ACCESSORIES, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_USER_MANAGEMENT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -237,7 +237,7 @@ int main() {
     std::string regMessage = "";
 
     // Products storage
-    struct Product { std::string name; double price; bool hasPrice; double salePercent; bool hasSale; std::string size; std::string fabric; std::string sex; std::string description; int fileIndex; };
+    struct Product { std::string name; double price; bool hasPrice; double salePercent; bool hasSale; std::string size; std::string fabric; std::string sex; std::string type; std::string description; int fileIndex; };
     std::vector<Product> products;
     std::vector<Product> filteredProducts; // For search/sort results
     bool productsLoaded = false;
@@ -248,7 +248,11 @@ int main() {
     bool searchActive = false;
     int sortMode = 0; // 0=default, 1=price asc, 2=price desc, 3=size asc, 4=size desc
     bool needsResort = true;
-    int selectedCategory = 0; // 0=All,1=Criança,2=Homem,3=Mulher,4=Bebê
+    int selectedCategory = 0; // 0=All,1=Kids,2=Men,3=Women,4=Baby
+    // Accessories subcategory selector: 0=All,1=Bags,2=Jewelry,3=Hats,4=Belts
+    int selectedAccessoryCategory = 0;
+    // New product type filter: 0=All,1=Clothing,2=Accessories,3=Shoes
+    int selectedProductType = 0;
     int editProductIndex = -1; // used by Edit Products screens
     bool editProductPopulateNeeded = false;
 
@@ -277,14 +281,27 @@ int main() {
             std::string sizeStr = tokens.size() > 2 ? tokens[2] : std::string();
             std::string fabricStr;
             std::string sexStr;
+            std::string typeStr;
             std::string descStr;
             double salePercent = 0.0;
             bool hasSale = false;
             // Support both old and new formats. Preferred new format:
-            // name;price;size;fabric;sex;description (description may contain ';')
-            if (tokens.size() >= 7) {
+            // Preferred new canonical format:
+            // name;price;size;fabric;sex;type;sale;description  (description may contain ';')
+            if (tokens.size() >= 8) {
                 fabricStr = tokens[3];
                 sexStr = tokens[4];
+                typeStr = tokens[5];
+                std::string saleStr = tokens[6];
+                descStr = tokens[7];
+                for (size_t i = 8; i < tokens.size(); ++i) descStr += ";" + tokens[i];
+                try { salePercent = std::stod(saleStr); hasSale = true; } catch(...) { hasSale = false; salePercent = 0.0; }
+            } else if (tokens.size() == 7) {
+                // older canonical format without explicit type: name;price;size;fabric;sex;sale;description
+                fabricStr = tokens[3];
+                sexStr = tokens[4];
+                // no explicit type available in this file line
+                typeStr = std::string();
                 std::string saleStr = tokens[5];
                 descStr = tokens[6];
                 for (size_t i = 7; i < tokens.size(); ++i) descStr += ";" + tokens[i];
@@ -293,6 +310,7 @@ int main() {
                 // ambiguous: token[5] might be sale or description. Detect numeric -> sale, otherwise description
                 fabricStr = tokens[3];
                 sexStr = tokens[4];
+                typeStr = std::string();
                 std::string t5 = tokens[5];
                 bool looksNumeric = !t5.empty();
                 for (char c : t5) if (!(isdigit((unsigned char)c) || c=='.' || c=='-' )) { looksNumeric = false; break; }
@@ -306,9 +324,11 @@ int main() {
                 // name;price;size;fabric;description  (no sex provided)
                 fabricStr = tokens[3];
                 descStr = tokens[4];
+                typeStr = std::string();
             } else if (tokens.size() == 4) {
                 // older format: name;price;size;description
                 descStr = tokens[3];
+                typeStr = std::string();
             }
 
             double price = 0.0;
@@ -322,7 +342,7 @@ int main() {
                     ok = true;
                 } catch (...) { ok = false; }
             }
-            products.push_back({ name, price, ok, salePercent, hasSale, sizeStr, fabricStr, sexStr, descStr, lineIndex });
+            products.push_back({ name, price, ok, salePercent, hasSale, sizeStr, fabricStr, sexStr, typeStr, descStr, lineIndex });
             ++lineIndex;
         }
 
@@ -374,17 +394,64 @@ int main() {
                 std::string sexLower = product.sex;
                 std::transform(sexLower.begin(), sexLower.end(), sexLower.begin(), ::tolower);
 
-                if (selectedCategory == 2) { // Homem
+                if (selectedCategory == 2) { // Men
                     categoryMatch = (sexLower == "m") || ciContains(product.name, "men") || ciContains(product.description, "men");
-                } else if (selectedCategory == 3) { // Mulher
+                } else if (selectedCategory == 3) { // Women
                     categoryMatch = (sexLower == "w") || ciContains(product.name, "women") || ciContains(product.description, "women") || ciContains(product.name, "mulher") || ciContains(product.description, "mulher");
-                } else if (selectedCategory == 4) { // Bebê
+                } else if (selectedCategory == 4) { // Baby
                     categoryMatch = (sexLower == "b") || ciContains(product.name, "bebe") || ciContains(product.name, "baby") || ciContains(product.description, "baby") || ciContains(product.description, "bebe");
-                } else if (selectedCategory == 1) { // Criança
+                } else if (selectedCategory == 1) { // Kids
                     categoryMatch = (sexLower == "k") || ciContains(product.name, "kid") || ciContains(product.name, "crian") || ciContains(product.description, "kid") || ciContains(product.description, "crian");
                 }
             }
             if (!categoryMatch) continue;
+
+            // Filter by product type if set (selectedProductType: 0=All,1=Clothing,2=Accessories,3=Shoes)
+            if (selectedProductType != 0) {
+                // If the product has an explicit type token, prefer that. Otherwise fallback to keyword heuristics.
+                bool typeMatch = false;
+                if (!product.type.empty()) {
+                    std::string t = product.type; std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+                    if (selectedProductType == 1) typeMatch = (t == "c");
+                    else if (selectedProductType == 2) typeMatch = (t == "a");
+                    else if (selectedProductType == 3) typeMatch = (t == "s");
+                } else {
+                    std::string nameLower = product.name; std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+                    std::string descLower = product.description; std::transform(descLower.begin(), descLower.end(), descLower.begin(), ::tolower);
+                    if (selectedProductType == 1) {
+                        // Clothing keywords
+                        static const std::vector<std::string> clothes = {"shirt","t-shirt","camiseta","dress","pants","calca","blouse","blusa","jeans","jacket","casaco","roupa","hoodie","sweater","shorts","bermuda","trousers","calças"};
+                        for (const auto &kw : clothes) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
+                    } else if (selectedProductType == 2) {
+                        // Accessories keywords
+                        static const std::vector<std::string> acc = {"hat","cap","cinto","belt","scarf","cachecol","bag","bolsa","mochila","sunglass","oculos","jewelry","bijuteria","accessory","acessorio"};
+                        for (const auto &kw : acc) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
+                        // If accessory subcategory is selected, additionally require a subcategory keyword match
+                        if (typeMatch && selectedAccessoryCategory != 0) {
+                            bool subMatch = false;
+                            if (selectedAccessoryCategory == 1) { // Bags
+                                static const std::vector<std::string> bags = {"bag","bolsa","mochila","sacola","purse"};
+                                for (const auto &kw : bags) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            } else if (selectedAccessoryCategory == 2) { // Jewelry
+                                static const std::vector<std::string> jewels = {"jewel","jewelry","bijuteria","bracelet","ring","necklace","colar"};
+                                for (const auto &kw : jewels) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            } else if (selectedAccessoryCategory == 3) { // Hats
+                                static const std::vector<std::string> hats = {"hat","cap","boné","beanie"};
+                                for (const auto &kw : hats) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            } else if (selectedAccessoryCategory == 4) { // Belts
+                                static const std::vector<std::string> belts = {"belt","cinto"};
+                                for (const auto &kw : belts) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { subMatch = true; break; }
+                            }
+                            if (!subMatch) typeMatch = false;
+                        }
+                    } else if (selectedProductType == 3) {
+                        // Shoes keywords
+                        static const std::vector<std::string> shoes = {"shoe","shoes","sapato","sneaker","tenis","boot","bota","sandalia","sapatilha","sapatinho","tênis"};
+                        for (const auto &kw : shoes) if (nameLower.find(kw) != std::string::npos || descLower.find(kw) != std::string::npos) { typeMatch = true; break; }
+                    }
+                }
+                if (!typeMatch) continue;
+            }
 
             if (searchTerm.empty()) {
                 filteredProducts.push_back(product);
@@ -790,53 +857,63 @@ int main() {
                 DrawTextScaled(maskedPass.c_str(), (int)passRect.x + 6, (int)passRect.y + 6, 20, colors.text);
                 if (newPasswordFocus) DrawRectangleLinesEx(passRect, 2, colors.accent);
 
-                // Handle password input focus
-                Vector2 mouse = GetMousePosition();
-                if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-                    newPasswordFocus = CheckCollisionPointRec(mouse, passRect);
-                }
-
-                if (newPasswordFocus) {
-                    int key = GetCharPressed();
-                    while (key > 0) {
-                        if (key >= 32 && key <= 125 && newPassword.size() < 127) {
-                            newPassword.push_back((char)key);
-                        }
-                        key = GetCharPressed();
-                    }
-                    if (IsKeyPressed(KEY_BACKSPACE) && !newPassword.empty()) {
-                        newPassword.pop_back();
-                    }
-                }
-
-                // Set Password button
-                Rectangle setBtn = { (float)(centerX - RW(0.15f)), passY + RH(0.08f), (float)RW(0.3f), (float)RH(0.06f) };
-                if (DrawButton(setBtn, "Set Password", colors.primary, colors, 20)) {
-                    if (newPassword.empty()) {
-                        resetError = "Please enter a new password.";
-                    } else if (newPassword.length() < 3) {
-                        resetError = "Password must be at least 3 characters.";
-                    } else {
-                        // Update the user's password
-                        bool userFound = false;
-                        for (auto &u : users) {
-                            if (u.name == std::string(forgotUser)) {
-                                u.pass = newPassword;
-                                SaveAllUsers();
-                                userFound = true;
-                                break;
-                            }
-                        }
-                        if (userFound) {
-                            // Success: automatically log in and go to menu
-                            currentUser = std::string(forgotUser);
-                            // Determine admin flag
-                            isAdmin = false;
-                            for (const auto &u : users) {
-                                if (u.name == currentUser) {
-                                    isAdmin = u.isAdmin;
-                                    break;
+                            // Confirm button
+                            Rectangle confirmResetBtn = { RX(0.4f), resetY + RH(0.08f), RW(0.2f), RH(0.06f) };
+                            if (DrawButton(confirmResetBtn, "Set Password", colors.primary, colors, 18)) {
+                                // Use the modal-scoped newPasswordInput and newPasswordInputFocus declared above.
+                                if (newPasswordInput.empty()) {
+                                    resetError = "Please enter a new password";
+                                } else if (newPasswordInput.length() < 3) {
+                                    resetError = "Password must be at least 3 characters";
+                                } else {
+                                    // Set the new password from user input
+                                    for (auto &u : users) {
+                                        if (u.name == std::string(forgotUser)) {
+                                            u.pass = newPasswordInput;
+                                            SaveAllUsers();
+                                            resetPasswordFormOpen = false;
+                                            newPasswordInput.clear();
+                                            newPasswordInputFocus = false;
+                                            codeEntered = true; // Move to success screen
+                                            break;
+                                        }
+                                    }
                                 }
+
+                                // Handle password input using the existing focus flag
+                                if (newPasswordInputFocus) {
+                                    int key = GetCharPressed();
+                                    while (key > 0) {
+                                        if (key >=
+     key <= 125) {
+                                            newPasswordInput += (char)key;
+                                        }
+                                        key = GetCharPressed();
+                                    }
+                                    if (IsKeyPressed(KEY_BACKSPACE) && !newPasswordInput.empty()) {
+                                        newPasswordInput.pop_back();
+                                    }
+                                }
+                            }
+
+                            // Draw password input field
+                            Rectangle passRect = { resetY - RH(0.08f), RY(0.35f), RW(0.3f), RH(0.06f) };
+                            DrawRectangleRec(passRect, colors.inputBg);
+                            DrawTextScaled("New Password:", (int)(passRect.x), (int)(passRect.y - RH(0.03f)), 16, colors.text);
+                            std::string maskedPassNew(newPasswordInput.length(), '*');
+                            DrawTextScaled(maskedPass.c_str(), (int)(passRect.x + 5), (int)(passRect.y + 5), 18, colors.text);
+
+                            // Handle input focus
+                            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                                Vector2 mousePos = GetMousePosition();
+                                newPasswordInputFocus = CheckCollisionPointRec(mousePos, passRect);
+                            }
+                            if (newPasswordInputFocus) {
+                                DrawRectangleLinesEx(passRect, 2, colors.accent);
+                            }
+                        // Show any error
+                            if (!resetError.empty()) {
+                                DrawTextScaled(resetError.c_str(), RX(0.3f), resetY + RH(0.16f), 16, RED);
                             }
                             // Load user's cart
                             currentCart = LoadCart(currentUser);
@@ -1051,11 +1128,11 @@ int main() {
             DrawTextScaled("Pepka", pepkaX, RY(0.25f), 60, colors.primary);
             DrawTextureEx(logo, logoPos, 0.0f, logoScale, WHITE);
 
-            // Menu buttons stack (aligned vertically with consistent spacing)
+            // Men ligned vertically with consistent spacing)
             float menuBaseY = RY(0.52f);
             float menuSpacing = RH(0.12f);
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)menuBaseY, (float)RW(0.25f), (float)RH(0.1f) };
-            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_CATALOG;
+            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_PRODUCT_TYPE;
 
             // Cart button (visible when logged in) placed under View
             Rectangle btnCart = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing), (float)RW(0.25f), (float)RH(0.1f) };
@@ -1080,8 +1157,24 @@ int main() {
                 DrawRectangleLinesEx(btnView, 3, DARK_ACCENT);
             }
          }
+        else if (state == STATE_PRODUCT_TYPE) {
+            // Top-level product type chooser: Clothing / Accessories / Shoes
+            DrawTextScaled("Choose product type", centerX - MeasureTextScaled("Choose product type", 28)/2, RY(0.12f), 28, colors.primary);
+            float btnW = RW(0.28f); float btnH = RH(0.12f); float gap = RW(0.04f);
+            float startX = centerX - (btnW*3 + gap*2)/2.0f;
+            float y = RY(0.30f);
+            Rectangle btnClothes = { startX, y, btnW, btnH };
+            Rectangle btnAcc = { startX + (btnW + gap), y, btnW, btnH };
+            Rectangle btnShoes = { startX + 2*(btnW + gap), y, btnW, btnH };
+            if (DrawButton(btnClothes, "Clothing", colors.buttonBg, colors, 24)) { selectedProductType = 1; selectedCategory = 0; productsLoaded = false; needsResort = true; state = STATE_CATALOG; }
+            if (DrawButton(btnAcc, "Accessories", colors.buttonBg, colors, 24)) { selectedProductType = 2; selectedCategory = 0; selectedAccessoryCategory = 0; productsLoaded = false; needsResort = true; state = STATE_CATALOG_ACCESSORIES; }
+            if (DrawButton(btnShoes, "Shoes", colors.buttonBg, colors, 24)) { selectedProductType = 3; selectedCategory = 0; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+
+            Rectangle backBtnPT = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtnPT, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+        }
         else if (state == STATE_CATALOG) {
-            // Simple category selector before viewing products
+            // Clothing category selector (used when user chose Clothing)
             DrawTextScaled("Choose a category", centerX - MeasureTextScaled("Choose a category", 28)/2, RY(0.12f), 28, colors.primary);
             float btnW = RW(0.28f); float btnH = RH(0.10f); float gap = RW(0.03f);
             float startX = centerX - (btnW*2 + gap)/2.0f;
@@ -1090,13 +1183,31 @@ int main() {
             Rectangle catMen = { startX + (btnW + gap), y, btnW, btnH };
             Rectangle catWomen = { startX, y + btnH + RH(0.04f), btnW, btnH };
             Rectangle catBaby = { startX + (btnW + gap), y + btnH + RH(0.04f), btnW, btnH };
-            if (DrawButton(catKids, "Kid", colors.buttonBg, colors, 28)) { selectedCategory = 1; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
-            if (DrawButton(catMen, "Man", colors.buttonBg, colors, 28)) { selectedCategory = 2; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catKids, "Kids", colors.buttonBg, colors, 28)) { selectedCategory = 1; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catMen, "Men", colors.buttonBg, colors, 28)) { selectedCategory = 2; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
             if (DrawButton(catWomen, "Women", colors.buttonBg, colors, 28)) { selectedCategory = 3; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
             if (DrawButton(catBaby, "Baby", colors.buttonBg, colors, 28)) { selectedCategory = 4; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
 
             Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_PRODUCT_TYPE;
+        }
+        else if (state == STATE_CATALOG_ACCESSORIES) {
+            // Accessories category selector (used when user chose Accessories)
+            DrawTextScaled("Choose an accessory category", centerX - MeasureTextScaled("Choose an accessory category", 28)/2, RY(0.12f), 28, colors.primary);
+            float btnW = RW(0.28f); float btnH = RH(0.10f); float gap = RW(0.03f);
+            float startX = centerX - (btnW*2 + gap)/2.0f;
+            float y = RY(0.28f);
+            Rectangle catBag = { startX, y, btnW, btnH };
+            Rectangle catJewelry = { startX + (btnW + gap), y, btnW, btnH };
+            Rectangle catHats = { startX, y + btnH + RH(0.04f), btnW, btnH };
+            Rectangle catBelts = { startX + (btnW + gap), y + btnH + RH(0.04f), btnW, btnH };
+            if (DrawButton(catBag, "Bags", colors.buttonBg, colors, 28)) { selectedAccessoryCategory = 1; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catJewelry, "Jewelry", colors.buttonBg, colors, 28)) { selectedAccessoryCategory = 2; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catHats, "Hats", colors.buttonBg, colors, 28)) { selectedAccessoryCategory = 3; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(catBelts, "Belts", colors.buttonBg, colors, 28)) { selectedAccessoryCategory = 4; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+
+            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_PRODUCT_TYPE;
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load & sort once
@@ -1106,7 +1217,13 @@ int main() {
             // responsive layout for list
             float margin = 0.025f;
             Rectangle backBtn = { (float)RX(margin), (float)RY(margin), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_CATALOG;
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) {
+                // If the user came here from the product-type chooser and selected Accessories or Shoes,
+                // go back to the product-type selector; if they selected Clothing, go back to the clothing categories.
+                if (selectedProductType == 1) state = STATE_CATALOG; // Clothing -> categories
+                else if (selectedProductType == 2) state = STATE_CATALOG_ACCESSORIES; // Accessories -> accessories categories
+                else state = STATE_PRODUCT_TYPE; // Shoes or others -> top-level product type chooser
+            }
 
             // Use Calibri for headings
             DrawTextScaled("Product List", centerX - MeasureTextScaled("Product List", 40)/2, RY(0.05f), 40, DARKBLUE);
@@ -1330,12 +1447,28 @@ int main() {
 
                 // Category selection (M/W/K/B) placed to the right of Price (label removed)
                 static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
+                static int selectedTypeAdd = 0; // 0=none,1=Clothing(C),2=Accessories(A),3=Shoes(S)
                 const std::vector<std::string> catLabels = {"M","W","K","B"};
                 for (size_t ci = 0; ci < catLabels.size(); ++ci) {
                     Rectangle cb = { catX + ci * (catBtnW + catGap), priceRect.y + (priceRect.height - catBtnH)/2.0f, catBtnW, catBtnH };
                     if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) selectedCategoryAdd = (int)ci + 1;
                     if (selectedCategoryAdd == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
                 }
+
+                // Type selection (C/A/S)
+                float typeLabelX = catX;
+                float typeY = priceRect.y + priceRect.height + RH(0.02f);
+                DrawTextScaled("Type:", labelX, (int)typeY + 6, 20, colors.text);
+                float tbtnW = RW(0.12f), tbtnH = inputH * 0.9f, tgap = RW(0.02f);
+                Rectangle tC = { inputX, typeY, tbtnW, tbtnH };
+                Rectangle tA = { inputX + (tbtnW + tgap), typeY, tbtnW, tbtnH };
+                Rectangle tS = { inputX + 2*(tbtnW + tgap), typeY, tbtnW, tbtnH };
+                if (DrawButton(tC, "Clothing", colors.buttonBg, colors, 16)) selectedTypeAdd = 1;
+                if (DrawButton(tA, "Accessories", colors.buttonBg, colors, 16)) selectedTypeAdd = 2;
+                if (DrawButton(tS, "Shoes", colors.buttonBg, colors, 16)) selectedTypeAdd = 3;
+                if (selectedTypeAdd == 1) DrawRectangleLinesEx(tC, 3, colors.accent);
+                if (selectedTypeAdd == 2) DrawRectangleLinesEx(tA, 3, colors.accent);
+                if (selectedTypeAdd == 3) DrawRectangleLinesEx(tS, 3, colors.accent);
 
                 // Size selection — buttons centered inside sizeAreaRect
                 DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 24, colors.text);
@@ -1413,8 +1546,13 @@ int main() {
                         else sexToken = std::string();
                         std::string descToken = std::string();
                         std::ostringstream newline;
-                        // format: name;price;size;fabric;sex;sale;description
-                        newline << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string((int)sp) : "0") << ";" << descToken;
+                        // canonical format: name;price;size;fabric;sex;type;sale;description
+                        std::string typeToken;
+                        if (selectedTypeAdd == 1) typeToken = "C";
+                        else if (selectedTypeAdd == 2) typeToken = "A";
+                        else if (selectedTypeAdd == 3) typeToken = "S";
+                        else typeToken = std::string();
+                        newline << nameInput << ";" << pr << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << typeToken << ";" << (okSale ? std::to_string((int)sp) : "0") << ";" << descToken;
 
                         if (editingIndex >= 0) {
                             // update existing by index (same logic)...
@@ -1680,6 +1818,7 @@ int main() {
                 // Form fields (populate from products[editProductIndex])
                 static std::string editName, editPrice, editSize, editSale; // Added editSale here
                 static int editCategory = 0;
+                static int editType = 0; // 0=none,1=C,2=A,3=S
                 static bool populated = false;
                 static std::string editDescription = "";
                 static std::string origEditName = "";
@@ -1696,6 +1835,9 @@ int main() {
                         std::ostringstream ssp; ssp << (int)p.salePercent;
                         editSale = ssp.str();
                     } else editSale.clear();
+                    // populate type selection
+                    std::string t = p.type; std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+                    if (t == "c") editType = 1; else if (t == "a") editType = 2; else if (t == "s") editType = 3; else editType = 0;
                     // remember original name for safer name-based replacement
                     origEditName = p.name;
                     populated = true;
@@ -1740,6 +1882,20 @@ int main() {
                     if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) editCategory = (int)ci + 1;
                     if (editCategory == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
                 }
+
+                // Type selection (C/A/S) in edit form
+                float typeY = priceRect.y + priceRect.height + RH(0.02f);
+                DrawTextScaled("Type:", labelX, (int)typeY + 6, 18, colors.text);
+                float tbtnW = RW(0.12f), tbtnH = inputH * 0.9f, tgap = RW(0.02f);
+                Rectangle tC = { inputX, typeY, tbtnW, tbtnH };
+                Rectangle tA = { inputX + (tbtnW + tgap), typeY, tbtnW, tbtnH };
+                Rectangle tS = { inputX + 2*(tbtnW + tgap), typeY, tbtnW, tbtnH };
+                if (DrawButton(tC, "Clothing", colors.buttonBg, colors, 16)) editType = 1;
+                if (DrawButton(tA, "Accessories", colors.buttonBg, colors, 16)) editType = 2;
+                if (DrawButton(tS, "Shoes", colors.buttonBg, colors, 16)) editType = 3;
+                if (editType == 1) DrawRectangleLinesEx(tC, 3, colors.accent);
+                if (editType == 2) DrawRectangleLinesEx(tA, 3, colors.accent);
+                if (editType == 3) DrawRectangleLinesEx(tS, 3, colors.accent);
 
                 // Size selection — buttons centered inside sizeAreaRect
                 DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
@@ -1837,9 +1993,14 @@ int main() {
                         std::string sexToken;
                         if (editCategory == 1) sexToken = "M"; else if (editCategory == 2) sexToken = "W"; else if (editCategory == 3) sexToken = "K"; else if (editCategory == 4) sexToken = "B";
 
-                        // Build new product line using canonical format: name;price;size;fabric;sex;sale;description
+                        // Build new product line using canonical format: name;price;size;fabric;sex;type;sale;description
                         std::ostringstream newline;
-                        newline << editName << ";" << editPrice << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << (okSale ? std::to_string(salePercentVal) : "0") << ";" << editDescription;
+                        std::string typeToken;
+                        if (editType == 1) typeToken = "C";
+                        else if (editType == 2) typeToken = "A";
+                        else if (editType == 3) typeToken = "S";
+                        else typeToken = std::string();
+                        newline << editName << ";" << editPrice << ";" << sizeToken << ";" << fabricToken << ";" << sexToken << ";" << typeToken << ";" << (okSale ? std::to_string(salePercentVal) : "0") << ";" << editDescription;
                         std::string newLine = newline.str();
 
                         bool replaced = false;
