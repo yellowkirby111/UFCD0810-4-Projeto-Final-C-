@@ -9,8 +9,9 @@
 #include <iomanip>
 #include <sstream>
 #include <cstring>
+#include <cmath>
 
-enum AppState { STATE_LOGIN, STATE_REGISTER,STATE_FORGOTPASSWORD, STATE_MENU, STATE_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_USER_MANAGEMENT, STATE_OPTIONS, STATE_EXIT };
+enum AppState { STATE_LOGIN, STATE_REGISTER,STATE_FORGOTPASSWORD, STATE_MENU, STATE_VIEW_TYPE, STATE_CATALOG, STATE_SUB_CATALOG, STATE_VIEW_PRODUCTS, STATE_CART, STATE_ADD_PRODUCT, STATE_EDIT_PRODUCTS, STATE_EDIT_PRODUCT, STATE_USER_MANAGEMENT, STATE_OPTIONS, STATE_EXIT };
 
 // Theme colors
 #define DARK_BACKGROUND (Color){15, 15, 15, 255}      // Very dark gray/black
@@ -120,6 +121,24 @@ static inline int MeasureTextScaled(const char *text, int baseFontSize) {
     return (int)MeasureTextEx(gFont, text, fontSize, spacing).x;
 }
 
+bool DrawButton(const Rectangle &r, const Texture2D &icon, Color baseColor, const ColorScheme &colors) {
+    Vector2 mouse = GetMousePosition();
+    bool hovered = CheckCollisionPointRec(mouse, r);
+    Color color = hovered ? Fade(baseColor, 0.8f) : baseColor;
+
+    DrawRectangleRec(r, color);
+    DrawRectangleLinesEx(r, 2, colors.primary);
+
+    // Calculate scaling to fit icon within button while maintaining aspect ratio
+    float scale = fmin(r.width / icon.width, r.height / icon.height) * 0.7f;
+    DrawTextureEx(icon, 
+        { r.x + (r.width - icon.width * scale)/2, r.y + (r.height - icon.height * scale)/2 },
+        0.0f, scale, WHITE);
+
+    if (hovered && IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) return true;
+    return false;
+}
+
 bool DrawButton(const Rectangle &r, const char *text, Color baseColor, const ColorScheme &colors, int fontSize = 20) {
     Vector2 mouse = GetMousePosition();
     bool hovered = CheckCollisionPointRec(mouse, r);
@@ -202,14 +221,6 @@ int main() {
         std::cout << "Default users: admin/1234 and user/password" << std::endl;
     }
 
-    // Debug: print all loaded users
-    std::cout << "\n=== LOADED USERS DEBUG ===" << std::endl;
-    for (size_t i = 0; i < users.size(); ++i) {
-        const auto& u = users[i];
-        std::cout << "User[" << i << "]: '" << u.name << "' / '" << u.pass << "' admin=" << (u.isAdmin?"1":"0") << std::endl;
-    }
-    std::cout << "===========================\n" << std::endl;
-
     AppState state = STATE_LOGIN;
     int menuIndex = 0;
     
@@ -249,6 +260,7 @@ int main() {
     int sortMode = 0; // 0=default, 1=price asc, 2=price desc, 3=size asc, 4=size desc
     bool needsResort = true;
     int selectedCategory = 0; // 0=All,1=Criança,2=Homem,3=Mulher,4=Bebê
+    int selectedProductGroup = 0; // 0=All/none,1=Clothes,2=Accessories,3=Shoes
     int editProductIndex = -1; // used by Edit Products screens
     bool editProductPopulateNeeded = false;
 
@@ -366,7 +378,7 @@ int main() {
             return h;
         };
 
-        // Filter by category then search term
+        // Filter by category then product-group (clothes/accessories/shoes) then search term
         for (const auto& product : products) {
             bool categoryMatch = true;
             if (selectedCategory != 0) {
@@ -386,6 +398,26 @@ int main() {
             }
             if (!categoryMatch) continue;
 
+            // Product-group filtering (basic keyword-based):
+            bool groupMatch = true;
+            if (selectedProductGroup == 2) { // Accessories
+                // Check for accessory keywords in name or description
+                std::string lname = product.name; std::string ldesc = product.description;
+                std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
+                std::transform(ldesc.begin(), ldesc.end(), ldesc.begin(), ::tolower);
+                const char* aks[] = {"accessor", "belt", "hat", "cap", "scarf", "bag", "purse", "sunglass", "earring", "necklace", "watch", "glove", "gloves"};
+                groupMatch = false;
+                for (const char* k : aks) if (lname.find(k) != std::string::npos || ldesc.find(k) != std::string::npos) { groupMatch = true; break; }
+            } else if (selectedProductGroup == 3) { // Shoes
+                std::string lname = product.name; std::string ldesc = product.description;
+                std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
+                std::transform(ldesc.begin(), ldesc.end(), ldesc.begin(), ::tolower);
+                const char* sks[] = {"shoe", "sneaker", "boot", "sandals", "trainer", "loafer", "flip", "cleat"};
+                groupMatch = false;
+                for (const char* k : sks) if (lname.find(k) != std::string::npos || ldesc.find(k) != std::string::npos) { groupMatch = true; break; }
+            }
+            if (!groupMatch) continue;
+
             if (searchTerm.empty()) {
                 filteredProducts.push_back(product);
             } else {
@@ -401,16 +433,24 @@ int main() {
         switch (sortMode) {
             case 1: // Price ascending
                 std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
-                    if (a.hasPrice != b.hasPrice) return a.hasPrice; // priced items first
+                    if (a.hasPrice != b.hasPrice) return a.hasPrice;
                     if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
-                    return a.price < b.price;
+                    double priceA = a.price;
+                    double priceB = b.price;
+                    if (a.hasSale) priceA *= (1.0 - a.salePercent/100.0);
+                    if (b.hasSale) priceB *= (1.0 - b.salePercent/100.0);
+                    return priceA < priceB;
                 });
                 break;
             case 2: // Price descending
                 std::sort(filteredProducts.begin(), filteredProducts.end(), [](const Product &a, const Product &b) {
-                    if (a.hasPrice != b.hasPrice) return a.hasPrice; // priced items first
+                    if (a.hasPrice != b.hasPrice) return a.hasPrice;
                     if (!a.hasPrice && !b.hasPrice) return a.name < b.name;
-                    return a.price > b.price;
+                    double priceA = a.price;
+                    double priceB = b.price;
+                    if (a.hasSale) priceA *= (1.0 - a.salePercent/100.0);
+                    if (b.hasSale) priceB *= (1.0 - b.salePercent/100.0);
+                    return priceA > priceB;
                 });
                 break;
             case 3: // Size ascending (use sizeRank for natural ordering)
@@ -524,6 +564,7 @@ int main() {
 
     // Add this near the top of main(), after InitWindow:
     Texture2D logo = LoadTexture("assets/logo.png");
+    Texture2D homeIcon = LoadTexture("assets/home_ggl.png");
 
     while (!WindowShouldClose() && state != STATE_EXIT) {
         // Handle ESC key navigation
@@ -964,11 +1005,18 @@ int main() {
             }
 
             // Action buttons
-            Rectangle backBtn = { (float)RX(0.30f), (float)RY(0.55f), (float)RW(0.15f), (float)RH(0.06f) };
-            Rectangle registerBtn = { (float)RX(0.55f), (float)RY(0.55f), (float)RW(0.15f), (float)RH(0.06f) };
+            float btnWidth = RW(0.15f);
+            float btnHeight = RH(0.06f);
+            float squareSize = btnHeight;
+            Rectangle backBtn = { (float)RX(0.30f), (float)RY(0.55f), btnWidth, btnHeight };
+            Rectangle homeBtn = { (float)(backBtn.x + backBtn.width + RW(0.02f)), (float)RY(0.55f), squareSize, squareSize };
+            Rectangle registerBtn = { (float)(homeBtn.x + homeBtn.width + RW(0.02f)), (float)RY(0.55f), btnWidth, btnHeight };
 
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) {
                 state = STATE_LOGIN;
+            }
+            if (DrawButton(homeBtn, homeIcon, colors.buttonBg, colors)) {
+                state = STATE_MENU;
             }
             if (DrawButton(registerBtn, "Register", colors.primary, colors, 16)) {
                 // Registration validation logic
@@ -1052,10 +1100,10 @@ int main() {
             DrawTextureEx(logo, logoPos, 0.0f, logoScale, WHITE);
 
             // Menu buttons stack (aligned vertically with consistent spacing)
-            float menuBaseY = RY(0.52f);
+            float menuBaseY = RY(0.42f);
             float menuSpacing = RH(0.12f);
             Rectangle btnView = { (float)(centerX - RW(0.125f)), (float)menuBaseY, (float)RW(0.25f), (float)RH(0.1f) };
-            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_CATALOG;
+            if (DrawButton(btnView, "View Products", colors.buttonBg, colors, 28)) state = STATE_VIEW_TYPE;
 
             // Cart button (visible when logged in) placed under View
             Rectangle btnCart = { (float)(centerX - RW(0.125f)), (float)(menuBaseY + menuSpacing), (float)RW(0.25f), (float)RH(0.1f) };
@@ -1086,17 +1134,47 @@ int main() {
             float btnW = RW(0.28f); float btnH = RH(0.10f); float gap = RW(0.03f);
             float startX = centerX - (btnW*2 + gap)/2.0f;
             float y = RY(0.28f);
-            Rectangle catKids = { startX, y, btnW, btnH };
-            Rectangle catMen = { startX + (btnW + gap), y, btnW, btnH };
-            Rectangle catWomen = { startX, y + btnH + RH(0.04f), btnW, btnH };
+            //Rectangle catKids = { startX, y, btnW, btnH };
+            //Rectangle catMen = { startX + (btnW + gap), y, btnW, btnH };
+            Rectangle catKids = { startX, y + btnH + RH(0.04f), btnW, btnH };
+            Rectangle catMen = { startX, y, btnW, btnH };
+            Rectangle catWomen = { startX + (btnW + gap), y, btnW, btnH };
             Rectangle catBaby = { startX + (btnW + gap), y + btnH + RH(0.04f), btnW, btnH };
             if (DrawButton(catKids, "Kid", colors.buttonBg, colors, 28)) { selectedCategory = 1; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
             if (DrawButton(catMen, "Man", colors.buttonBg, colors, 28)) { selectedCategory = 2; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
             if (DrawButton(catWomen, "Women", colors.buttonBg, colors, 28)) { selectedCategory = 3; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
             if (DrawButton(catBaby, "Baby", colors.buttonBg, colors, 28)) { selectedCategory = 4; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
 
-            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            float margin = 0.025f;
+            float btnWidth = RW(0.10f);
+            float btnHeight = RH(0.05f);
+            float squareSize = btnHeight;  // Make home button square
+            Rectangle backBtn = { (float)RX(margin), (float)RY(margin), btnWidth, btnHeight };
+            Rectangle homeBtn = { (float)(backBtn.x + backBtn.width + RW(0.01f)), (float)RY(margin), squareSize, squareSize };
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_VIEW_TYPE;
+            if (DrawButton(homeBtn, homeIcon, colors.buttonBg, colors)) state = STATE_MENU;
+        }
+        else if (state == STATE_VIEW_TYPE) {
+            // Choose type: Clothes (goes to category selector), Accessories or Shoes (go straight to list filtered)
+            DrawTextScaled("Choose view type", centerX - MeasureTextScaled("Choose view type", 28)/2, RY(0.12f), 28, colors.primary);
+            float btnW = RW(0.28f); float btnH = RH(0.10f); float gap = RW(0.03f);
+            float startX = centerX - (btnW*2 + gap)/2.0f;
+            float y = RY(0.28f);
+            Rectangle btnClothes = { startX, y, btnW, btnH };
+            Rectangle btnAccessories = { startX + (btnW + gap), y, btnW, btnH };
+            Rectangle btnShoes = { RX(0.5f)-(btnW/2), y + btnH + RH(0.04f), btnW, btnH };
+            if (DrawButton(btnClothes, "Clothes", colors.buttonBg, colors, 28)) { selectedProductGroup = 1; state = STATE_CATALOG; }
+            if (DrawButton(btnAccessories, "Accessories", colors.buttonBg, colors, 28)) { selectedProductGroup = 2; selectedCategory = 0; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+            if (DrawButton(btnShoes, "Shoes", colors.buttonBg, colors, 28)) { selectedProductGroup = 3; selectedCategory = 0; productsLoaded = false; needsResort = true; state = STATE_VIEW_PRODUCTS; }
+
+            float margin = 0.025f;
+            float btnWidth = RW(0.10f);
+            float btnHeight = RH(0.05f);
+            float squareSize = btnHeight;  // Make home button square
+            Rectangle backBtn = { (float)RX(margin), (float)RY(margin), btnWidth, btnHeight };
+            Rectangle homeBtn = { (float)(backBtn.x + backBtn.width + RW(0.01f)), (float)RY(margin), squareSize, squareSize };
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(homeBtn, homeIcon, colors.buttonBg, colors)) state = STATE_MENU;
         }
         else if (state == STATE_VIEW_PRODUCTS) {
             // Load & sort once
@@ -1105,15 +1183,23 @@ int main() {
 
             // responsive layout for list
             float margin = 0.025f;
-            Rectangle backBtn = { (float)RX(margin), (float)RY(margin), (float)RW(0.10f), (float)RH(0.05f) };
-            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_CATALOG;
+            float btnWidth = RW(0.10f);
+            float btnHeight = RH(0.05f);
+            float squareSize = btnHeight;  // Make home button square
+            Rectangle backBtn = { (float)RX(margin), (float)RY(margin), btnWidth, btnHeight };
+            Rectangle homeBtn = { (float)(backBtn.x + backBtn.width + RW(0.01f)), (float)RY(margin), squareSize, squareSize };
+            if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) {
+                if (selectedProductGroup == 1) state = STATE_CATALOG; // clothes -> return to categories
+                else { state = STATE_VIEW_TYPE; selectedProductGroup = 0; } // others -> return to view-type menu
+            }
+            if (DrawButton(homeBtn, homeIcon, colors.buttonBg, colors)) state = STATE_MENU;
 
             // Use Calibri for headings
             DrawTextScaled("Product List", centerX - MeasureTextScaled("Product List", 40)/2, RY(0.05f), 40, DARKBLUE);
 
             // Search area
-            DrawTextScaled("Search:", RX(0.025f), RY(0.12f), 18, colors.text);
-            Rectangle searchRect = { (float)RX(0.12f), (float)RY(0.11f), (float)RW(0.30f), (float)RH(0.05f) };
+            DrawTextScaled("Search:", RX(0.025f), RY(0.16f), 18, colors.text);
+            Rectangle searchRect = { (float)RX(0.12f), (float)RY(0.16f), (float)RW(0.30f), (float)RH(0.05f) };
             DrawRectangleRec(searchRect, LIGHTGRAY);
             DrawTextScaled(searchInput, (int)searchRect.x + 6, (int)searchRect.y + 6, 18, BLACK);
             if (searchActive) DrawRectangleLinesEx(searchRect, 2, BLUE);
@@ -1137,24 +1223,32 @@ int main() {
             // Sorting buttons
             float sortStartX = RX(0.45f);
             float sortW = RW(0.12f); float sortH = RH(0.05f); float sortGap = RW(0.02f);
-            Rectangle sortPriceAscBtn = { sortStartX, (float)RY(0.11f), sortW, sortH };
-            Rectangle sortPriceDescBtn = { sortStartX + sortW + sortGap, (float)RY(0.11f), sortW, sortH };
-            Rectangle sortSizeAscBtn = { sortStartX + (sortW+sortGap)*2, (float)RY(0.11f), sortW, sortH };
-            Rectangle sortSizeDescBtn = { sortStartX + (sortW+sortGap)*3, (float)RY(0.11f), sortW, sortH };
+            Rectangle sortPriceBtn = { sortStartX, (float)RY(0.16f), sortW*1.0f, sortH };
+            Rectangle sortSizeBtn = { sortStartX + (sortW+sortGap)*1, (float)RY(0.16f), sortW, sortH };
             Color sortBtnColor = colors.buttonBg;
-            if (DrawButton(sortPriceAscBtn, "Price ^", (sortMode==1)?LIME:sortBtnColor, colors, 14)) { sortMode=1; needsResort=true; }
-            if (DrawButton(sortPriceDescBtn, "Price v", (sortMode==2)?LIME:sortBtnColor, colors, 14)) { sortMode=2; needsResort=true; }
-            if (DrawButton(sortSizeAscBtn, "Size ^", (sortMode==3)?LIME:sortBtnColor, colors, 14)) { sortMode=3; needsResort=true; }
-            if (DrawButton(sortSizeDescBtn, "Size v", (sortMode==4)?LIME:sortBtnColor, colors, 14)) { sortMode=4; needsResort=true; }
-
-            // Info
-            if (!searchInput[0] && sortMode == 0) DrawTextScaled("Showing all products", RX(0.025f), RY(0.17f), 16, GRAY);
-            else {
-                static std::string msg = "";
-                std::string info = "Showing " + std::to_string(filteredProducts.size()) + " of " + std::to_string(products.size()) + " products";
-                if (searchInput[0]) info += " (filtered)";
-                DrawTextScaled(info.c_str(), RX(0.025f), RY(0.17f), 16, GRAY);
+            // Price toggle button: click alternates between Price ascending (1) and descending (2)
+            const char *priceLabel = "Price";
+            Color priceColor = sortBtnColor;
+            if (sortMode == 1) { priceLabel = "Price ^"; priceColor = DARK_ACCENT; }
+            else if (sortMode == 2) { priceLabel = "Price v"; priceColor = DARK_ACCENT; }
+            if (DrawButton(sortPriceBtn, priceLabel, priceColor, colors, 14)) {
+                if (sortMode == 1) sortMode = 2;
+                else sortMode = 1;
+                needsResort = true;
             }
+            // Size toggle button: alternates between Size ascending (3) and descending (4)
+            const char *sizeLabel = "Size";
+            Color sizeColor = sortBtnColor;
+            if (sortMode == 3) { sizeLabel = "Size ^"; sizeColor = DARK_ACCENT; }
+            else if (sortMode == 4) { sizeLabel = "Size v"; sizeColor = DARK_ACCENT; }
+            if (DrawButton(sortSizeBtn, sizeLabel, sizeColor, colors, 14)) {
+                if (sortMode == 3) sortMode = 4;
+                else sortMode = 3;
+                needsResort = true;
+            }
+
+
+
 
             // Scroll & list
             float wheel = GetMouseWheelMove(); productsScroll -= wheel * RH(0.05f);
@@ -1166,7 +1260,7 @@ int main() {
             if (productsScroll < minScroll) productsScroll = minScroll;
             if (productsScroll > 0) productsScroll = 0;
 
-            float startY = RY(0.23f);
+            float startY = RY(0.27f);
             if (products.empty()) {
                 DrawTextScaled("No products found. Create 'data/products.txt' with one product per line (name;price).", RX(0.05f), RY(0.35f), 18, RED);
             } else if (filteredProducts.empty()) {
@@ -1269,8 +1363,14 @@ int main() {
         }
         else if (state == STATE_ADD_PRODUCT) {
             // Back button
-            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            float margin = 0.025f;
+            float btnWidth = RW(0.10f);
+            float btnHeight = RH(0.05f);
+            float squareSize = btnHeight;  // Make home button square
+            Rectangle backBtn = { (float)RX(margin), (float)RY(margin), btnWidth, btnHeight };
+            Rectangle homeBtn = { (float)(backBtn.x + backBtn.width + RW(0.01f)), (float)RY(margin), squareSize, squareSize };
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_EDIT_PRODUCTS;
+            if (DrawButton(homeBtn, homeIcon, colors.buttonBg, colors)) state = STATE_MENU;
 
             // Quick link to Edit Products
             Rectangle editProductsBtn = { (float)(sw - RW(0.18f)), (float)RY(0.025f), (float)RW(0.16f), (float)RH(0.05f) };
@@ -1321,13 +1421,6 @@ int main() {
                 DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
 
-                // Sale % field (below price)
-                Rectangle saleRect = { inputX, priceRect.y + priceRect.height + RH(0.02f), fullW * 0.2f, inputH };
-                DrawTextScaled("Sale %:", labelX, (int)saleRect.y + 6, 20, colors.text);
-                DrawRectangleRec(saleRect, colors.inputBg);
-                DrawTextScaled(saleInput.c_str(), (int)saleRect.x + 8, (int)saleRect.y + 6, 18, colors.text);
-                if (activeFieldAdd == 3) DrawRectangleLinesEx(saleRect, 2, colors.accent);
-
                 // Category selection (M/W/K/B) placed to the right of Price (label removed)
                 static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
                 const std::vector<std::string> catLabels = {"M","W","K","B"};
@@ -1336,6 +1429,14 @@ int main() {
                     if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) selectedCategoryAdd = (int)ci + 1;
                     if (selectedCategoryAdd == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
                 }
+
+                // Sale % input moved below category buttons
+                float saleY = priceRect.y + priceRect.height + RH(0.08f);
+                Rectangle saleRect = { inputX, saleY, fullW * 0.2f, inputH };
+                DrawTextScaled("Sale %:", labelX, (int)saleRect.y - 4, 20, colors.text);
+                DrawRectangleRec(saleRect, colors.inputBg);
+                DrawTextScaled(saleInput.c_str(), (int)saleRect.x + 8, (int)saleRect.y + 6, 18, colors.text);
+                if (activeFieldAdd == 3) DrawRectangleLinesEx(saleRect, 2, colors.accent);
 
                 // Size selection — buttons centered inside sizeAreaRect
                 DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 24, colors.text);
@@ -1463,8 +1564,14 @@ int main() {
             if (!productsLoaded) { productsLoaded = LoadProducts("data/products.txt"); needsResort = true; }
 
             // Back button
-            Rectangle backBtn = { (float)RX(0.025f), (float)RY(0.025f), (float)RW(0.10f), (float)RH(0.05f) };
+            float margin = 0.025f;
+            float btnWidth = RW(0.10f);
+            float btnHeight = RH(0.05f);
+            float squareSize = btnHeight;  // Make home button square
+            Rectangle backBtn = { (float)RX(margin), (float)RY(margin), btnWidth, btnHeight };
+            Rectangle homeBtn = { (float)(backBtn.x + backBtn.width + RW(0.01f)), (float)RY(margin), squareSize, squareSize };
             if (DrawButton(backBtn, "< Back", colors.buttonBg, colors, 16)) state = STATE_MENU;
+            if (DrawButton(homeBtn, homeIcon, colors.buttonBg, colors)) state = STATE_MENU;
 
             std::string totStr = "";
             if (currentUser.empty()) {
@@ -1486,7 +1593,7 @@ int main() {
                 float gap = RH(0.015f);
 
                 // Header row background
-                Rectangle headerRect = { listX, listY - rowH*0.6f, RW(0.88f), rowH*0.7f };
+                Rectangle headerRect = { listX, listY - rowH*0.9f, RW(0.88f), rowH*0.7f };
                 DrawRectangleRec(headerRect, Fade(colors.inputBg, 0.95f));
                 DrawTextScaled("Item", (int)listX + 8, (int)(headerRect.y + 6), 18, colors.text);
                 DrawTextScaled("Qty", (int)(listX + colNameW + 6), (int)(headerRect.y + 6), 18, colors.text);
@@ -1683,6 +1790,7 @@ int main() {
                 static bool populated = false;
                 static std::string editDescription = "";
                 static std::string origEditName = "";
+                static bool descFocus = false;
                 if (editProductPopulateNeeded || !populated) {
                     const auto &p = products[editProductIndex];
                     editName = p.name;
@@ -1702,8 +1810,8 @@ int main() {
                     editProductPopulateNeeded = false;
                 }
 
-                // Layout like Add Product (simplified)
-                float topY = RY(0.15f);
+                // Layout metrics (exactly matching Add Product)
+                float topY = RY(0.10f);  // Same as Add Product
                 float labelX = RX(0.12f);
                 float inputX = RX(0.30f);
                 float fullW = RW(0.58f);
@@ -1712,9 +1820,14 @@ int main() {
 
                 Rectangle nameRect = { inputX, topY, fullW, inputH };
                 Rectangle priceRect = { inputX, nameRect.y + inputH + gapV, fullW * 0.4f, inputH };
+                // Category buttons layout
                 float catX = priceRect.x + priceRect.width + RW(0.02f);
-                float catBtnW = RW(0.06f), catBtnH = inputH * 0.9f, catGap = RW(0.015f);
-                Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV, fullW, inputH };
+                float catBtnW = RW(0.06f);
+                float catBtnH = inputH * 0.9f;
+                float catGap = RW(0.015f);
+                // Match Add Product vertical spacing
+                float extraVerticalOffset = RH(0.08f);
+                Rectangle sizeAreaRect = { inputX, priceRect.y + inputH + gapV + extraVerticalOffset, fullW, inputH };
 
                 DrawTextScaled("Name:", labelX, (int)nameRect.y + 6, 20, colors.text);
                 DrawRectangleRec(nameRect, colors.inputBg);
@@ -1723,14 +1836,6 @@ int main() {
                 DrawTextScaled("Price:", labelX, (int)priceRect.y + 6, 20, colors.text);
                 DrawRectangleRec(priceRect, colors.inputBg);
                 DrawTextScaled(editPrice.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
-
-                // Draw sale input near price
-                Rectangle saleRectEdit = { priceRect.x + priceRect.width + RW(0.02f), priceRect.y, RW(0.12f), priceRect.height };
-                DrawTextScaled("Sale%:", (int)(saleRectEdit.x - MeasureTextScaled("Sale%:", 18) - 6), (int)saleRectEdit.y + 6, 18, colors.text);
-                DrawRectangleRec(saleRectEdit, colors.inputBg);
-                DrawTextScaled(editSale.c_str(), (int)saleRectEdit.x + 6, (int)saleRectEdit.y + 6, 18, colors.text);
-                static bool saleFocus = false;
-                if (saleFocus) DrawRectangleLinesEx(saleRectEdit, 2, colors.accent);
 
                 // Category selection (M/W/K/B) placed to the right of Price (label removed)
                 static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
@@ -1741,37 +1846,47 @@ int main() {
                     if (editCategory == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
                 }
 
-                // Size selection — buttons centered inside sizeAreaRect
-                DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 20, colors.text);
+                // Sale % input below category buttons
+                float saleY = priceRect.y + priceRect.height + RH(0.08f);
+                Rectangle saleRectEdit = { inputX, saleY, fullW * 0.2f, inputH };
+                DrawTextScaled("Sale %:", labelX, (int)saleRectEdit.y - 4, 20, colors.text);
+                DrawRectangleRec(saleRectEdit, colors.inputBg);
+                DrawTextScaled(editSale.c_str(), (int)saleRectEdit.x + 8, (int)saleRectEdit.y + 6, 18, colors.text);
+                static bool saleFocus = false;
+                if (saleFocus) DrawRectangleLinesEx(saleRectEdit, 2, colors.accent);
+
+                // Size selection (matching Add Product layout)
+                DrawTextScaled("Size:", labelX, (int)sizeAreaRect.y + 6, 24, colors.text);
                 static const std::vector<std::string> sizeOptions = {"XS","S","M","L","XL","XXL"};
                 float sbtnW = RW(0.09f), sbtnH = inputH * 0.9f, sGap = RW(0.02f);
                 float totalS = sbtnW * (float)sizeOptions.size() + sGap * ((float)sizeOptions.size() - 1.0f);
                 float startSx = inputX + (fullW - totalS) / 2.0f;
                 float sBtnsY = sizeAreaRect.y + (sizeAreaRect.height - sbtnH) / 2.0f;
+
                 for (size_t si = 0; si < sizeOptions.size(); ++si) {
                     Rectangle sb = { startSx + si * (sbtnW + sGap), sBtnsY, sbtnW, sbtnH };
                     if (DrawButton(sb, sizeOptions[si].c_str(), colors.buttonBg, colors, 18)) { editSize = sizeOptions[si]; }
                     if (!editSize.empty() && editSize == sizeOptions[si]) DrawRectangleLinesEx(sb, 2, colors.accent);
                 }
 
-                // Action buttons layout (compute early so description rect can be placed relative to them)
-                // Use unique early names here to avoid redeclaration collisions later
-                float actionY_early = sizeAreaRect.y + inputH + gapV;
-                float actionW_early = RW(0.22f), actionH_early = RH(0.08f), actionGap_early = RW(0.04f);
-                float totalActionW_early = actionW_early * 2 + actionGap_early;
-                float actionStartX_early = centerX - totalActionW_early / 2.0f;
-                Rectangle btnUpdate_early = { actionStartX_early, actionY_early, actionW_early, actionH_early };
-                Rectangle btnCancel_early = { actionStartX_early + actionW_early + actionGap_early, actionY_early, actionW_early, actionH_early };
-
-                // Description rectangle computed now so click handling can reference it
-                // Compute description area using the early action layout values
-                float descY = actionY_early + actionH_early + (float)RH(0.02f);
+                // Description area (matching Add Product layout)
+                float descY = sizeAreaRect.y + inputH + gapV * 1.2f;
                 float descH = (float)RH(0.18f);
-                Rectangle descRect; descRect.x = inputX; descRect.y = descY; descRect.width = fullW; descRect.height = descH;
+                Rectangle descRect = { inputX, descY, fullW, descH };
+                DrawTextScaled("Description:", labelX, (int)descY + 6, 20, colors.text);
+                DrawRectangleRec(descRect, colors.inputBg);
+                DrawTextScaled(editDescription.c_str(), (int)descRect.x + 8, (int)descRect.y + 8, 18, colors.text);
+                if (descFocus) DrawRectangleLinesEx(descRect, 2, colors.accent);
+
+                // Action buttons (matching Add Product layout)
+                float actionY = descY + descH + gapV * 1.2f;
+                float actionW = RW(0.22f), actionH = RH(0.08f), actionGap = RW(0.04f);
+                float totalActionW = actionW * 3 + actionGap * 2;  // Space for 3 buttons
+                float actionStartX = centerX - totalActionW / 2.0f;
 
                 // Click-to-focus and keyboard input for Name/Price/Description fields
                 static int editFieldFocus = 0; // 0=name, 1=price, 2=none
-                static bool descFocus = false;
+
                 Vector2 mousePos = GetMousePosition();
                 if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
                     if (CheckCollisionPointRec(mousePos, nameRect)) { editFieldFocus = 0; descFocus = false; saleFocus = false; }
@@ -1808,11 +1923,13 @@ int main() {
                     }
                 }
 
-                // Action buttons: Update, Delete, Cancel
-                float actionY = sizeAreaRect.y + inputH + gapV;
-                float actionW = RW(0.22f), actionH = RH(0.08f), actionGap = RW(0.04f);
-                float totalActionW = actionW * 3 + actionGap * 2;
-                float actionStartX = centerX - totalActionW / 2.0f;
+                // Action buttons: Update, Delete, Cancel (moved below description)
+                actionY = descY + descRect.height + gapV * 1.5f;
+                actionW = RW(0.22f);
+                actionH = RH(0.08f);
+                actionGap = RW(0.04f);
+                totalActionW = actionW * 3 + actionGap * 2;
+                actionStartX = centerX - totalActionW / 2.0f;
                 Rectangle btnUpdate = { actionStartX, actionY, actionW, actionH };
                 Rectangle btnDelete = { actionStartX + actionW + actionGap, actionY, actionW, actionH };
                 Rectangle btnCancel = { actionStartX + (actionW + actionGap) * 2, actionY, actionW, actionH };
@@ -2378,6 +2495,7 @@ int main() {
     // at exit, unload the font
     UnloadFont(gFont);
     UnloadTexture(logo);
+    UnloadTexture(homeIcon);
     CloseWindow();
     std::cout << "Exiting application." << std::endl;
     return 0;
