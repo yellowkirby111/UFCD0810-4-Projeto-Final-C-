@@ -1387,6 +1387,8 @@ int main() {
                 static std::string nameInput, priceInput, sizeInput, removeInput, saleInput, msg;
                 static int activeFieldAdd = 0; // 0=name,1=price,2=remove,3=sale
                 static int editingIndex = -1; // index in products when editing, -1 = new
+                static int selectedProductType = 0; // 0=none, 1=Clothes, 2=Shoes, 3=Accessories
+                static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
 
                 // Layout metrics
                 float topY = RY(0.10f);
@@ -1420,20 +1422,42 @@ int main() {
                 DrawRectangleRec(priceRect, colors.inputBg);
                 DrawTextScaled(priceInput.c_str(), (int)priceRect.x + 8, (int)priceRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 1) DrawRectangleLinesEx(priceRect, 2, colors.accent);
-
-                // Category selection (M/W/K/B) placed to the right of Price (label removed)
-                static int selectedCategoryAdd = 0; // 0=none,1=M,2=W,3=K,4=B
-                const std::vector<std::string> catLabels = {"M","W","K","B"};
-                for (size_t ci = 0; ci < catLabels.size(); ++ci) {
-                    Rectangle cb = { catX + ci * (catBtnW + catGap), priceRect.y + (priceRect.height - catBtnH)/2.0f, catBtnW, catBtnH };
-                    if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) selectedCategoryAdd = (int)ci + 1;
-                    if (selectedCategoryAdd == (int)ci + 1) DrawRectangleLinesEx(cb, 3, colors.accent);
+                // Then add this code after the price input and before the sex category buttons:
+                // Product type selection (Clothes/Shoes/Accessories)
+                float typeX = priceRect.x + priceRect.width + RW(0.02f);
+                float typeBtnW = RW(0.08f);
+                float typeBtnH = inputH * 0.9f;
+                float typeGap = RW(0.015f);
+                
+                const std::vector<std::string> typeLabels = {"Clothes", "Shoes", "Access."};
+                for (size_t ti = 0; ti < typeLabels.size(); ++ti) {
+                    Rectangle tb = { typeX + ti * (typeBtnW + typeGap), priceRect.y, typeBtnW, typeBtnH };
+                    if (DrawButton(tb, typeLabels[ti].c_str(), colors.buttonBg, colors, 16)) {
+                        selectedProductType = (int)ti + 1;
+                        // Reset sex category when changing type
+                        if (selectedProductType != 1) selectedCategoryAdd = 0;
+                    }
+                    if (selectedProductType == (int)ti + 1) DrawRectangleLinesEx(tb, 3, colors.accent);
                 }
 
+                // Only show sex category buttons if Clothes is selected
+                if (selectedProductType == 1) {
+                    // Category selection (M/W/K/B)
+                    const std::vector<std::string> catLabels = {"M","W","K","B"};
+                    float catY = priceRect.y + priceRect.height + RH(0.02f);
+                    for (size_t ci = 0; ci < catLabels.size(); ++ci) {
+                        Rectangle cb = { typeX + ci * (catBtnW + catGap), catY, catBtnW, catBtnH };
+                        if (DrawButton(cb, catLabels[ci].c_str(), colors.buttonBg, colors, 18)) 
+                            selectedCategoryAdd = (int)ci + 1;
+                        if (selectedCategoryAdd == (int)ci + 1) 
+                            DrawRectangleLinesEx(cb, 3, colors.accent);
+
+                    }
+                }
                 // Sale % input moved below category buttons
-                float saleY = priceRect.y + priceRect.height + RH(0.08f);
+                float saleY = priceRect.y + priceRect.height + RH(0.03f);
                 Rectangle saleRect = { inputX, saleY, fullW * 0.2f, inputH };
-                DrawTextScaled("Sale %:", labelX, (int)saleRect.y - 4, 20, colors.text);
+                DrawTextScaled("Sale %:", labelX, (int)saleRect.y , 20, colors.text);
                 DrawRectangleRec(saleRect, colors.inputBg);
                 DrawTextScaled(saleInput.c_str(), (int)saleRect.x + 8, (int)saleRect.y + 6, 18, colors.text);
                 if (activeFieldAdd == 3) DrawRectangleLinesEx(saleRect, 2, colors.accent);
@@ -1847,9 +1871,9 @@ int main() {
                 }
 
                 // Sale % input below category buttons
-                float saleY = priceRect.y + priceRect.height + RH(0.08f);
+                float saleY = priceRect.y + priceRect.height + RH(0.03f);
                 Rectangle saleRectEdit = { inputX, saleY, fullW * 0.2f, inputH };
-                DrawTextScaled("Sale %:", labelX, (int)saleRectEdit.y - 4, 20, colors.text);
+                DrawTextScaled("Sale %:", labelX, (int)saleRectEdit.y, 20, colors.text);
                 DrawRectangleRec(saleRectEdit, colors.inputBg);
                 DrawTextScaled(editSale.c_str(), (int)saleRectEdit.x + 8, (int)saleRectEdit.y + 6, 18, colors.text);
                 static bool saleFocus = false;
