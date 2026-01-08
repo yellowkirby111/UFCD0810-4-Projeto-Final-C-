@@ -1,4 +1,4 @@
-admin:qwertyui:admin
+admin:admin:admin
 user:password
 alex:sigma2
 alex2:sigma

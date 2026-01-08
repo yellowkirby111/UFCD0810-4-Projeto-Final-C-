@@ -1716,7 +1716,7 @@ int main() {
             }
 
             // Draw header last so it appears on top of cards
-            DrawTextScaled("My Cart", centerX - MeasureTextScaled("My Cart", 36)/2, RY(0.08f), 36, colors.primary);
+            DrawTextScaled("My Cart", centerX - MeasureTextScaled("My Cart", 36)/2, RY(0.06f), 36, colors.primary);
 
             // Draw totals box after everything else so it remains on top and not overlapped
             {
@@ -2026,7 +2026,7 @@ int main() {
                 if (DrawButton(btnCancel, "Cancel", colors.buttonBg, colors, 20)) { state = STATE_EDIT_PRODUCTS; populated = false; }
 
                 // Description textarea below action buttons (draw using descRect defined above)
-                DrawTextScaled("Description:", labelX, (int)descRect.y - 18, 18, colors.text);
+                DrawTextScaled("", labelX, (int)descRect.y - 18, 18, colors.text);
                 DrawRectangleRec(descRect, colors.inputBg);
                 // show text (simple multi-line naive wrap)
                 int lineY = (int)descRect.y + 6;
@@ -2139,16 +2139,16 @@ int main() {
                 // Username (readonly)
                 std::string uname = users[editUserIndex].name;
                 DrawTextScaled("Username:", (int)modal.x + 12, (int)modal.y + 40, 18, colors.text);
-                DrawTextScaled(uname.c_str(), (int)modal.x + 130, (int)modal.y + 40, 18, colors.text);
+                DrawTextScaled(uname.c_str(), (int)modal.x + 180, (int)modal.y + 40, 18, colors.text);
 
                 // Password input (masked — no reveal button: passwords must remain hidden)
                 DrawTextScaled("Password:", (int)modal.x + 12, (int)modal.y + 72, 18, colors.text);
                 Rectangle passRect = { modal.x + 130, modal.y + 68, modal.width - 150, RH(0.06f) };
-                DrawRectangleRec(passRect, colors.inputBg);
+              
 
                 // Always display masked password (asterisks). Admin cannot reveal stored passwords.
                 std::string passDisplay = editUserNewPass.empty() ? "(no change)" : std::string(editUserNewPass.size(), '*');
-                DrawTextScaled(passDisplay.c_str(), (int)passRect.x + 6, (int)passRect.y + 6, 18, colors.text);
+                DrawTextScaled(passDisplay.c_str(), (int)passRect.x + 40, (int)passRect.y + 6, 18, colors.text);
 
                 // persistent focus flag for password input (declare before use)
                 static bool userPassFocus = false;
