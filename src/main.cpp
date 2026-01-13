@@ -1318,17 +1318,17 @@ int main() {
                     // Show fabric and sex metadata if available
                     int metaY = (int)modal.y + 54;
                     if (!p.fabric.empty()) {
-                        std::string fabricLine = std::string("Fabric: ") + p.fabric;
+                        std::string fabricLine = std::string("description: ") + p.fabric;
                         DrawTextScaled(fabricLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
                         metaY += 22;
                     }
                     if (!p.sex.empty()) {
                         std::string sexLine = std::string("For: ") + p.sex;
-                        DrawTextScaled(sexLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
-                        metaY += 22;
+                        DrawTextScaled(sexLine.c_str(), (int)modal.x + 20, metaY, 150, colors.text);
+                        metaY += 20;
                     }
 
-                    std::string desc = p.description.empty() ? "(No description)" : p.description;
+                    std::string desc = p.description.empty() ? "" : p.description;
                     int descY = metaY + 6;
                     int maxWidth = (int)modal.width - 40;
                     std::istringstream iss(desc);
@@ -1897,7 +1897,7 @@ int main() {
                 float descY = sizeAreaRect.y + inputH + gapV * 1.2f;
                 float descH = (float)RH(0.18f);
                 Rectangle descRect = { inputX, descY, fullW, descH };
-                DrawTextScaled("Description:", labelX, (int)descY + 6, 20, colors.text);
+                DrawTextScaled("Description:", labelX, (int)descY + 4, 20, colors.text);
                 DrawRectangleRec(descRect, colors.inputBg);
                 DrawTextScaled(editDescription.c_str(), (int)descRect.x + 8, (int)descRect.y + 8, 18, colors.text);
                 if (descFocus) DrawRectangleLinesEx(descRect, 2, colors.accent);
