@@ -1324,8 +1324,8 @@ int main() {
                     }
                     if (!p.sex.empty()) {
                         std::string sexLine = std::string("For: ") + p.sex;
-                        DrawTextScaled(sexLine.c_str(), (int)modal.x + 20, metaY, 150, colors.text);
-                        metaY += 20;
+                        DrawTextScaled(sexLine.c_str(), (int)modal.x + 20, metaY, 18, colors.text);
+                        metaY += 152;
                     }
 
                     std::string desc = p.description.empty() ? "" : p.description;
